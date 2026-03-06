@@ -4,39 +4,32 @@
 import { CONFIG } from './config.js';
 
 export class ContentInjector {
+  private proxyHintInjection: string;
+  private httpRequestInjection: string;
+  private htmlPathInject: string;
+
   constructor() {
     this.proxyHintInjection = this.generateProxyHintScript();
     this.httpRequestInjection = this.generateHttpRequestScript();
     this.htmlPathInject = this.generateHtmlPathScript();
   }
 
-  /**
-   * Inject scripts and modify HTML content
-   * @param {string} body - HTML body content
-   * @param {string} actualUrl - Actual URL being proxied
-   * @param {boolean} hasProxyHintCookie - Whether proxy hint cookie exists
-   * @returns {Promise<string>} Modified HTML content
-   */
-  async injectHTML(body, actualUrl, hasProxyHintCookie) {
+  async injectHTML(body: string, actualUrl: string, hasProxyHintCookie: boolean): Promise<string> {
     try {
-      // Handle BOM if present
       let hasBom = false;
       if (body.charCodeAt(0) === 0xFEFF) {
         body = body.substring(1);
         hasBom = true;
       }
 
-      // Encode original body for injection
-      const encodedBody = new TextEncoder().encode(body);
-      const bodyArray = Array.from(encodedBody).join(',');
+      const encodedBody = btoa(unescape(encodeURIComponent(body)));
 
-      // Generate injection script
       const injectionScript = `
 <!DOCTYPE html>
 <script>
 (function () {
   // OmniBox proxy hint injection
-  ${(!hasProxyHintCookie) ? this.proxyHintInjection : ""}
+  ${(!hasProxyHintCookie) ? this.proxyHintInjection : ''}
 })();
 
 (function () {
@@ -46,45 +39,40 @@ export class ContentInjector {
   // HTML path conversion functions
   ${this.htmlPathInject}
 
-  // Original body data
-  const originalBodyBase64Encoded = "${bodyArray}";
-  const bytes = new Uint8Array(originalBodyBase64Encoded.split(',').map(Number));
+  // Original body data (Base64 encoded for efficiency)
+  const originalBodyBase64Encoded = "${encodedBody}";
+  // UTF-8 safe decoding
+  const decodedBody = decodeURIComponent(escape(atob(originalBodyBase64Encoded)));
 
   if (window.${CONFIG.DEBUG_MODE}) {
     console.log('%c' + 'Debug code start', 'color: blue; font-size: 15px;');
-    console.log('%c' + new TextDecoder().decode(bytes), 'color: green; font-size: 10px; padding:5px;');
+    console.log('%c' + decodedBody, 'color: green; font-size: 10px; padding:5px;');
     console.log('%c' + 'Debug code end', 'color: blue; font-size: 15px;');
   }
 
   // Execute HTML injection
-  ${CONFIG.HTML_INJECT_FUNC_NAME}(new TextDecoder().decode(bytes));
+  ${CONFIG.HTML_INJECT_FUNC_NAME}(decodedBody);
 })();
 </script>
 `;
 
-      return (hasBom ? "\uFEFF" : "") + injectionScript;
+      return (hasBom ? '\uFEFF' : '') + injectionScript;
     } catch (error) {
       console.error('HTML injection error:', error);
-      return body; // Return original content on error
+      return body;
     }
   }
 
-  /**
-   * Replace URLs in non-HTML text content
-   * @param {string} content - Text content
-   * @returns {string} Modified content with replaced URLs
-   */
-  replaceURLsInText(content) {
+  replaceURLsInText(content: string): string {
     try {
-      // Regex to match URLs not already in src/href attributes
-      const urlRegex = new RegExp(`(?<!src="|href=")(https?:\\/\\/[^\\s'"]+)`, 'g');
-      
-      return content.replaceAll(urlRegex, (match) => {
-        if (match.startsWith("http")) {
-          return `${globalThis.thisProxyServerUrlHttps}${match}`;
-        } else {
-          return `${globalThis.thisProxyServerUrl_hostOnly}/${match}`;
+      const urlRegex = /(https?:\/\/[^\s'"]+)/g;
+
+      return content.replaceAll(urlRegex, (match, offset, string) => {
+        const before = string.substring(Math.max(0, offset - 10), offset);
+        if (before.includes('src="') || before.includes('href="')) {
+          return match;
         }
+        return `${(globalThis as any).thisProxyServerUrlHttps}${match}`;
       });
     } catch (error) {
       console.error('URL replacement error:', error);
@@ -92,11 +80,7 @@ export class ContentInjector {
     }
   }
 
-  /**
-   * Generate proxy hint injection script
-   * @returns {string} Proxy hint script
-   */
-  generateProxyHintScript() {
+  private generateProxyHintScript(): string {
     return `
 (function() {
   var hintDismissed = false;
@@ -228,11 +212,7 @@ export class ContentInjector {
 `;
   }
 
-  /**
-   * Generate HTTP request injection script
-   * @returns {string} HTTP request hook script
-   */
-  generateHttpRequestScript() {
+  private generateHttpRequestScript(): string {
     return `
 // OmniBox proxy server information
 var nowURL = new URL(window.location.href);
@@ -586,17 +566,39 @@ function historyInject() {
   console.log("History API injected");
 }
 
-// DOM observer for dynamic content
+// DOM observer for dynamic content with performance optimization
 function obsPage() {
+  // Debounce timer for performance optimization
+  var debounceTimer = null;
+  var pendingMutations = [];
+  
   var proxyObserver = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-      traverseAndConvert(mutation);
-    });
+    // Collect mutations and process with debounce
+    pendingMutations = pendingMutations.concat(mutations);
+    
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    debounceTimer = setTimeout(function() {
+      // Process all pending mutations at once
+      pendingMutations.forEach(function(mutation) {
+        traverseAndConvert(mutation);
+      });
+      pendingMutations = [];
+      debounceTimer = null;
+    }, 100); // 100ms debounce
   });
   
-  var config = { attributes: true, childList: true, subtree: true };
+  // Optimized config: only observe relevant attributes
+  var config = { 
+    attributes: true, 
+    childList: true, 
+    subtree: true,
+    attributeFilter: ['src', 'href', 'action', 'srcset', 'poster', 'data']
+  };
   proxyObserver.observe(document.body, config);
-  console.log("DOM observer started");
+  console.log("DOM observer started with debounce optimization");
 }
 
 function traverseAndConvert(node) {
@@ -741,11 +743,7 @@ console.log("Error event handler added");
 `;
   }
 
-  /**
-   * Generate HTML path injection script
-   * @returns {string} HTML path injection script
-   */
-  generateHtmlPathScript() {
+  private generateHtmlPathScript(): string {
     return `
 function ${CONFIG.HTML_INJECT_FUNC_NAME}(htmlString) {
   // Parse and modify HTML string
@@ -781,15 +779,16 @@ function ${CONFIG.HTML_INJECT_FUNC_NAME}(htmlString) {
 }
 
 function replaceContentPaths(content) {
-  // Replace URLs in content
-  let regex = new RegExp(\`(?<!src="|href=")(https?:\\\\/\\\\/[^\\s'"]+)\`, 'g');
+  // Replace URLs in content using compatible regex without lookbehind
+  let regex = /(https?:\\/\\/[^\\s'"]+)/g;
   
-  content = content.replaceAll(regex, (match) => {
-    if (match.startsWith("http")) {
-      return proxy_host_with_schema + match;
-    } else {
-      return proxy_host + "/" + match;
+  content = content.replaceAll(regex, (match, offset, string) => {
+    // Check if URL is already inside src=" or href=" attribute
+    const before = string.substring(Math.max(0, offset - 10), offset);
+    if (before.includes('src="') || before.includes('href="')) {
+      return match;
     }
+    return proxy_host_with_schema + match;
   });
 
   return content;

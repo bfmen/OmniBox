@@ -3,7 +3,6 @@
 
 import { CONFIG } from './config.js';
 
-// Common CSS styles used across templates
 const commonStyles = `
 /* OmniBox common styles - 现代深色主题设计 */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -96,6 +95,7 @@ body::after {
 
 .glass-card {
   background: var(--bg-card);
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border-radius: var(--radius-xl);
   padding: 40px;
@@ -263,7 +263,6 @@ body::after {
 }
 `;
 
-// Main page specific styles - 主页专属样式
 const mainPageStyles = `
 .container {
   max-width: 900px;
@@ -278,6 +277,7 @@ body {
 
 .proxy-card {
   background: var(--bg-card);
+  -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
   border-radius: var(--radius-xl);
   padding: 40px;
@@ -533,7 +533,6 @@ body {
 }
 `;
 
-// Password page specific styles - 密码页面专属样式
 const passwordPageStyles = `
 .password-container {
   animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
@@ -649,11 +648,7 @@ const passwordPageStyles = `
 }
 `;
 
-/**
- * Generate main page template
- * @returns {string} Main page HTML
- */
-export function getMainPageTemplate() {
+export function getMainPageTemplate(): string {
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -820,12 +815,7 @@ export function getMainPageTemplate() {
   `;
 }
 
-/**
- * Generate password authentication page template
- * @param {string} passwordCookieName - Name of password cookie
- * @returns {string} Password page HTML
- */
-export function getPasswordPageTemplate(passwordCookieName) {
+export function getPasswordPageTemplate(passwordCookieName: string): string {
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -966,14 +956,7 @@ export function getPasswordPageTemplate(passwordCookieName) {
   `;
 }
 
-/**
- * Generate error page template
- * @param {string} errorTitle - Error title
- * @param {string} errorMessage - Error message
- * @param {number} statusCode - HTTP status code
- * @returns {string} Error page HTML
- */
-export function getErrorPageTemplate(errorTitle, errorMessage, statusCode = 500) {
+export function getErrorPageTemplate(errorTitle: string, errorMessage: string, statusCode: number = 500): string {
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">

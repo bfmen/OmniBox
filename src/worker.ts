@@ -3,40 +3,75 @@
 
 import { ProxyHandler } from './proxy.js';
 import { CacheManager } from './cache.js';
-import { CONFIG } from './config.js';
-import { getUnrestrictedCorsHeaders } from './utils.js';
+import { CONFIG, type EnvVariables } from './config.js';
+import { getUnrestrictedCorsHeaders, generateRequestId, Logger } from './utils.js';
 
-/**
- * Main request handler for Cloudflare Worker
- * Routes requests to appropriate handlers
- */
-async function handleRequest(request, env = {}) {
+declare global {
+  var thisProxyServerUrlHttps: string;
+  var thisProxyServerUrl_hostOnly: string;
+}
+
+interface HealthCheckResponse {
+  status: string;
+  timestamp: string;
+  version: string;
+  service: string;
+  globals: {
+    https: string;
+    host: string;
+  };
+  features: {
+    enhancedProxyMode: boolean;
+    originalFunctionality: boolean;
+    kvCache: boolean;
+    corsSupport: boolean;
+    passwordProtection: boolean;
+    proxyHint: boolean;
+  };
+}
+
+interface StatusResponse {
+  status: string;
+  proxyMode: string;
+  timestamp: number;
+  version: string;
+  cors: string;
+  caching: boolean;
+  passwordProtected: boolean;
+  hintEnabled: boolean;
+}
+
+interface CacheClearResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+async function handleRequest(request: Request, env: EnvVariables): Promise<Response> {
+  const logger = Logger.create('Worker', env);
+  const requestId = generateRequestId();
+  logger.setRequestId(requestId);
+
   const url = new URL(request.url);
-  
-  // Set global proxy server URL
-  globalThis.thisProxyServerUrlHttps = `${url.protocol}//${url.hostname}/`;
-  globalThis.thisProxyServerUrl_hostOnly = url.host;
 
-  // Create cache manager
+  (globalThis as any).thisProxyServerUrlHttps = `${url.protocol}//${url.hostname}/`;
+  (globalThis as any).thisProxyServerUrl_hostOnly = url.host;
+
   const cacheManager = env.KV_CACHE ? new CacheManager(env.KV_CACHE, env) : null;
-  
-  // Create proxy handler
+
   const proxyHandler = new ProxyHandler(env, cacheManager);
 
-  // Handle CORS preflight requests
   if (request.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       headers: getUnrestrictedCorsHeaders(),
       status: 204
     });
   }
 
-  // API Routes
   if (url.pathname.startsWith('/api/')) {
     return handleApiRequest(url, request, env, cacheManager);
   }
 
-  // Check cache for GET requests
   if (request.method === 'GET' && cacheManager) {
     const cacheKey = cacheManager.generateCacheKey(
       request.url,
@@ -53,31 +88,30 @@ async function handleRequest(request, env = {}) {
           ...cached.headers,
           'X-Cache': 'HIT',
           'X-OmniBox-Proxy': CONFIG.VERSION,
+          'X-Request-Id': requestId,
           ...getUnrestrictedCorsHeaders()
         }
       });
+      logger.debug('Cache hit', { cacheKey });
       return response;
     }
   }
 
-  // Handle proxy request
   const originalResponse = await proxyHandler.handleRequest(request);
 
-  // Add CORS headers to response
   const newHeaders = new Headers(originalResponse.headers);
   Object.entries(getUnrestrictedCorsHeaders()).forEach(([key, value]) => {
     newHeaders.set(key, value);
   });
+  newHeaders.set('X-Request-Id', requestId);
 
-  // Create final response
   const finalResponse = new Response(originalResponse.body, {
     status: originalResponse.status,
     statusText: originalResponse.statusText,
     headers: newHeaders
   });
 
-  // Async cache for successful GET requests
-  if (request.method === 'GET' && cacheManager && 
+  if (request.method === 'GET' && cacheManager &&
       originalResponse.status >= 200 && originalResponse.status < 300) {
     const responseForCache = finalResponse.clone();
     const cacheKey = cacheManager.generateCacheKey(
@@ -85,34 +119,35 @@ async function handleRequest(request, env = {}) {
       request.method,
       Object.fromEntries(request.headers.entries())
     );
-    
+
     cacheManager.set(cacheKey, responseForCache).catch(err => {
-      console.error('Failed to cache response:', err);
+      logger.error('Failed to cache response', { cacheKey, error: String(err) });
     });
   }
 
   return finalResponse;
 }
 
-/**
- * Handle API requests
- */
-async function handleApiRequest(url, request, env, cacheManager) {
-  const headers = {
+async function handleApiRequest(
+  url: URL,
+  request: Request,
+  env: EnvVariables,
+  cacheManager: CacheManager | null
+): Promise<Response> {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...getUnrestrictedCorsHeaders()
   };
 
-  // Health check endpoint
   if (url.pathname === '/api/health' || url.pathname === '/_health') {
-    return new Response(JSON.stringify({
+    const healthResponse: HealthCheckResponse = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       version: CONFIG.VERSION,
       service: 'OmniBox Proxy Worker',
       globals: {
-        https: globalThis.thisProxyServerUrlHttps || 'NOT_SET',
-        host: globalThis.thisProxyServerUrl_hostOnly || 'NOT_SET'
+        https: (globalThis as any).thisProxyServerUrlHttps || 'NOT_SET',
+        host: (globalThis as any).thisProxyServerUrl_hostOnly || 'NOT_SET'
       },
       features: {
         enhancedProxyMode: true,
@@ -122,12 +157,12 @@ async function handleApiRequest(url, request, env, cacheManager) {
         passwordProtection: !!(env.PROXY_PASSWORD || CONFIG.DEFAULT_PASSWORD),
         proxyHint: true
       }
-    }), { headers });
+    };
+    return new Response(JSON.stringify(healthResponse), { headers });
   }
 
-  // Status endpoint
   if (url.pathname === '/api/status') {
-    return new Response(JSON.stringify({
+    const statusResponse: StatusResponse = {
       status: 'active',
       proxyMode: 'omnibox-enhanced',
       timestamp: Date.now(),
@@ -136,65 +171,72 @@ async function handleApiRequest(url, request, env, cacheManager) {
       caching: !!env.KV_CACHE,
       passwordProtected: !!(env.PROXY_PASSWORD || CONFIG.DEFAULT_PASSWORD),
       hintEnabled: true
-    }), { headers });
+    };
+    return new Response(JSON.stringify(statusResponse), { headers });
   }
 
-  // Cache management endpoint
   if (url.pathname === '/api/cache/clear' && request.method === 'POST') {
     if (cacheManager) {
       try {
-        const { pattern } = await request.json().catch(() => ({}));
-        await cacheManager.clearPattern(pattern || CONFIG.CACHE_PREFIX);
-        
-        return new Response(JSON.stringify({
+        const body = await request.json().catch(() => ({})) as { pattern?: string };
+        await cacheManager.clearPattern(body.pattern || CONFIG.CACHE_PREFIX);
+
+        const clearResponse: CacheClearResponse = {
           success: true,
           message: 'Cache cleared successfully'
-        }), { headers });
+        };
+        return new Response(JSON.stringify(clearResponse), { headers });
       } catch (error) {
-        return new Response(JSON.stringify({
+        const errorResponse: CacheClearResponse = {
           error: 'Cache clear failed',
-          message: error.message
-        }), {
+          message: error instanceof Error ? error.message : 'Unknown error'
+        };
+        return new Response(JSON.stringify(errorResponse), {
           status: 500,
           headers
         });
       }
     } else {
-      return new Response(JSON.stringify({
+      const errorResponse: CacheClearResponse = {
         error: 'Cache not configured'
-      }), {
+      };
+      return new Response(JSON.stringify(errorResponse), {
         status: 400,
         headers
       });
     }
   }
 
-  // API not found
-  return new Response(JSON.stringify({
+  const notFoundResponse = {
     error: 'API endpoint not found'
-  }), {
+  };
+  return new Response(JSON.stringify(notFoundResponse), {
     status: 404,
     headers
   });
 }
 
-/**
- * Cloudflare Worker fetch event handler
- */
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: EnvVariables, _ctx: ExecutionContext): Promise<Response> {
+    const logger = Logger.create('Worker', env);
+
     try {
       return await handleRequest(request, env);
     } catch (error) {
-      console.error('OmniBox Worker error:', error);
-      
-      return new Response(JSON.stringify({
+      logger.error('OmniBox Worker error', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: env.DEBUG === 'true' ? (error instanceof Error ? error.stack : undefined) : undefined
+      });
+
+      const errorResponse = {
         error: 'Proxy service error',
-        message: env && env.DEBUG === 'true' ? error.message : 'Internal server error',
-        stack: env && env.DEBUG === 'true' ? error.stack : undefined,
+        message: env.DEBUG === 'true' ? (error instanceof Error ? error.message : 'Unknown error') : 'Internal server error',
+        requestId: generateRequestId(),
         version: CONFIG.VERSION,
         timestamp: new Date().toISOString()
-      }), {
+      };
+
+      return new Response(JSON.stringify(errorResponse), {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
