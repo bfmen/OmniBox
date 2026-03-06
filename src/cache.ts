@@ -23,11 +23,6 @@ export interface CacheStats {
   error?: string;
 }
 
-export interface CacheManagerOptions {
-  kv: KVNamespace | null;
-  env: EnvVariables;
-}
-
 export class CacheManager {
   private kv: KVNamespace | null;
   private env: EnvVariables;
@@ -277,24 +272,5 @@ export class CacheManager {
 
     await Promise.allSettled(preloadPromises);
     this.logger.info('Cache preloading completed');
-  }
-
-  shouldCache(url: string, method: string = 'GET'): boolean {
-    if (method !== 'GET') return false;
-
-    try {
-      const urlObj = new URL(url);
-
-      if (urlObj.pathname.startsWith('/api/')) return false;
-
-      const authParams = ['token', 'api_key', 'access_token', 'auth'];
-      for (const param of authParams) {
-        if (urlObj.searchParams.has(param)) return false;
-      }
-
-      return true;
-    } catch {
-      return false;
-    }
   }
 }

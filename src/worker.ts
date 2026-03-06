@@ -275,8 +275,8 @@ export default {
         stack: env.DEBUG === 'true' ? (error instanceof Error ? error.stack : undefined) : undefined
       });
 
-      const errorMessage = env.DEBUG === 'true' 
-        ? (error instanceof Error ? error.message : 'Unknown error') 
+      const errorMessage = env.DEBUG === 'true'
+        ? (error instanceof Error ? error.message : 'Unknown error')
         : '服务暂时不可用，请稍后重试';
 
       return getHTMLResponse(
