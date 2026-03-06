@@ -14,10 +14,8 @@ export interface CacheTTLConfig {
 export interface FeaturesConfig {
   ENABLE_CACHE: boolean;
   ENABLE_COMPRESSION: boolean;
-  ENABLE_RATE_LIMITING: boolean;
   ENABLE_USER_AGENT_BLOCKING: boolean;
   ENABLE_CONTENT_FILTERING: boolean;
-  ENABLE_ANALYTICS: boolean;
   ENABLE_DEBUG_LOGGING: boolean;
 }
 
@@ -26,6 +24,7 @@ export interface PerformanceConfig {
   REQUEST_TIMEOUT: number;
   MAX_RESPONSE_SIZE: number;
   CONCURRENT_REQUESTS_LIMIT: number;
+  PRELOAD_URLS: string[];
 }
 
 export interface HeadersConfig {
@@ -52,15 +51,9 @@ export interface URLPatternsConfig {
 export interface ErrorMessagesConfig {
   INVALID_URL: string;
   ACCESS_DENIED: string;
-  RATE_LIMITED: string;
   PROXY_ERROR: string;
   CACHE_ERROR: string;
   NETWORK_ERROR: string;
-}
-
-export interface RateLimitConfig {
-  REQUESTS_PER_MINUTE: number;
-  WINDOW_SIZE: number;
 }
 
 export interface LoggingConfig {
@@ -74,11 +67,10 @@ export interface LoggingConfig {
 }
 
 export interface APIConfig {
-  HEALTH_CHECK: string[];
+  HEALTH_CHECK: string;
   STATUS: string;
   CACHE_CLEAR: string;
-  STATS: string;
-  CONFIG: string;
+  CACHE_PRELOAD: string;
 }
 
 export interface EnvironmentOverride {
@@ -111,7 +103,6 @@ export interface AppConfig {
   CORS_MAX_AGE: number;
   BLOCKED_EXTENSIONS: string[];
   BLOCKED_USER_AGENTS: string[];
-  RATE_LIMIT: RateLimitConfig;
   CONTENT_TYPES: ContentTypesConfig;
   URL_PATTERNS: URLPatternsConfig;
   ERROR_MESSAGES: ErrorMessagesConfig;
@@ -186,11 +177,6 @@ export const CONFIG: AppConfig = {
     'facebookexternalhit'
   ],
 
-  RATE_LIMIT: {
-    REQUESTS_PER_MINUTE: 60,
-    WINDOW_SIZE: 60000
-  },
-
   CONTENT_TYPES: {
     HTML: ['text/html', 'application/xhtml+xml'],
     CSS: ['text/css'],
@@ -220,7 +206,6 @@ export const CONFIG: AppConfig = {
   ERROR_MESSAGES: {
     INVALID_URL: 'Invalid URL format. Please enter a valid website address.',
     ACCESS_DENIED: 'Access denied. Please check your credentials.',
-    RATE_LIMITED: 'Too many requests. Please wait before trying again.',
     PROXY_ERROR: 'Proxy service error. Please try again later.',
     CACHE_ERROR: 'Cache service error.',
     NETWORK_ERROR: 'Network connection error. Please check your internet connection.'
@@ -246,10 +231,8 @@ Crawl-delay: 10
   FEATURES: {
     ENABLE_CACHE: true,
     ENABLE_COMPRESSION: true,
-    ENABLE_RATE_LIMITING: true,
     ENABLE_USER_AGENT_BLOCKING: true,
     ENABLE_CONTENT_FILTERING: true,
-    ENABLE_ANALYTICS: false,
     ENABLE_DEBUG_LOGGING: false
   },
 
@@ -257,7 +240,8 @@ Crawl-delay: 10
     MAX_REDIRECT_DEPTH: 5,
     REQUEST_TIMEOUT: 30000,
     MAX_RESPONSE_SIZE: 50 * 1024 * 1024,
-    CONCURRENT_REQUESTS_LIMIT: 10
+    CONCURRENT_REQUESTS_LIMIT: 10,
+    PRELOAD_URLS: []
   },
 
   HEADERS: {
@@ -288,11 +272,10 @@ Crawl-delay: 10
   },
 
   API: {
-    HEALTH_CHECK: ['/api/health', '/_health'],
+    HEALTH_CHECK: '/api/health',
     STATUS: '/api/status',
     CACHE_CLEAR: '/api/cache/clear',
-    STATS: '/api/stats',
-    CONFIG: '/api/config'
+    CACHE_PRELOAD: '/api/cache/preload'
   },
 
   LOGGING: {
@@ -308,8 +291,7 @@ Crawl-delay: 10
   ENV_OVERRIDES: {
     development: {
       FEATURES: {
-        ENABLE_DEBUG_LOGGING: true,
-        ENABLE_ANALYTICS: false
+        ENABLE_DEBUG_LOGGING: true
       },
       CACHE_TTL: {
         HTML: 60,
@@ -323,8 +305,7 @@ Crawl-delay: 10
 
     staging: {
       FEATURES: {
-        ENABLE_DEBUG_LOGGING: true,
-        ENABLE_ANALYTICS: true
+        ENABLE_DEBUG_LOGGING: true
       },
       LOGGING: {
         DEFAULT_LEVEL: 2
@@ -333,8 +314,7 @@ Crawl-delay: 10
 
     production: {
       FEATURES: {
-        ENABLE_DEBUG_LOGGING: false,
-        ENABLE_ANALYTICS: true
+        ENABLE_DEBUG_LOGGING: false
       },
       LOGGING: {
         DEFAULT_LEVEL: 1

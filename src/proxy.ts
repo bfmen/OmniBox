@@ -3,7 +3,7 @@
 
 import { CONFIG, type EnvVariables } from './config.js';
 import { ContentInjector } from './injector.js';
-import { getMainPageTemplate, getPasswordPageTemplate } from './templates.js';
+import { getMainPageTemplate, getPasswordPageTemplate, getErrorPageTemplate } from './templates.js';
 import { getCookie, getHTMLResponse, getRedirect, getUnrestrictedCorsHeaders } from './utils.js';
 import { CacheManager } from './cache.js';
 
@@ -103,8 +103,28 @@ export class ProxyHandler {
     const pathIndex = url.pathname.indexOf(CONFIG.URL_SEPARATOR);
     if (pathIndex === -1) return '';
 
-    return url.pathname.substring(pathIndex + CONFIG.URL_SEPARATOR.length) +
+    let extractedUrl = url.pathname.substring(pathIndex + CONFIG.URL_SEPARATOR.length) +
            url.search + url.hash;
+
+    try {
+      const decodedUrl = decodeURIComponent(extractedUrl);
+      if (decodedUrl !== extractedUrl && this.looksLikeEncodedUrl(extractedUrl)) {
+        extractedUrl = decodedUrl;
+      }
+    } catch {
+      // URL 解码失败，保持原样
+    }
+
+    return extractedUrl;
+  }
+
+  private looksLikeEncodedUrl(url: string): boolean {
+    return url.includes('%3A%2F%2F') ||
+           url.includes('%2F') ||
+           url.includes('%3A') ||
+           url.includes('%3F') ||
+           url.includes('%3D') ||
+           url.includes('%26');
   }
 
   private validateAndNormalizeUrl(actualUrlStr: string, siteCookie: string | null): URL | RedirectResult {
@@ -130,7 +150,7 @@ export class ProxyHandler {
       }
       return {
         redirect: true,
-        response: getHTMLResponse(`Invalid URL format: ${actualUrlStr}`)
+        response: getHTMLResponse(getErrorPageTemplate('URL 格式错误', `无效的网址格式: ${actualUrlStr}`, 400))
       };
     }
 
@@ -173,7 +193,7 @@ export class ProxyHandler {
         return getRedirect(`${(globalThis as any).thisProxyServerUrlHttps}${redirectUrl}`);
       } catch {
         return getHTMLResponse(
-          `Redirect error: ${response.headers.get('Location')} from ${actualUrl.href}`
+          getErrorPageTemplate('重定向错误', `无法处理重定向: ${response.headers.get('Location')}`, 500)
         );
       }
     }

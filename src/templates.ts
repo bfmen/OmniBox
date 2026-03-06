@@ -4,7 +4,7 @@
 import { CONFIG } from './config.js';
 
 const commonStyles = `
-/* OmniBox common styles - 现代深色主题设计 */
+/* OmniBox common styles - 深色/浅色主题设计 */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 * {
@@ -41,6 +41,34 @@ const commonStyles = `
   --transition-fast: 0.15s ease;
   --transition-normal: 0.3s ease;
   --transition-slow: 0.5s ease;
+  --noise-opacity: 0.03;
+  --gradient-opacity-1: 0.15;
+  --gradient-opacity-2: 0.1;
+  --gradient-opacity-3: 0.08;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --accent-primary: #6366f1;
+  --accent-secondary: #8b5cf6;
+  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  --accent-glow: rgba(99, 102, 241, 0.2);
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border-color: rgba(99, 102, 241, 0.25);
+  --border-glow: rgba(139, 92, 246, 0.2);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.08);
+  --noise-opacity: 0.02;
+  --gradient-opacity-1: 0.08;
+  --gradient-opacity-2: 0.05;
+  --gradient-opacity-3: 0.04;
 }
 
 body {
@@ -55,6 +83,7 @@ body {
   justify-content: center;
   position: relative;
   overflow-x: hidden;
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
 body::before {
@@ -65,9 +94,9 @@ body::before {
   right: 0;
   bottom: 0;
   background: 
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139, 92, 246, 0.1), transparent),
-    radial-gradient(ellipse 40% 30% at 10% 60%, rgba(168, 85, 247, 0.08), transparent);
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, var(--gradient-opacity-1)), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139, 92, 246, var(--gradient-opacity-2)), transparent),
+    radial-gradient(ellipse 40% 30% at 10% 60%, rgba(168, 85, 247, var(--gradient-opacity-3)), transparent);
   pointer-events: none;
   z-index: 0;
 }
@@ -80,9 +109,46 @@ body::after {
   right: 0;
   bottom: 0;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-  opacity: 0.03;
+  opacity: var(--noise-opacity);
   pointer-events: none;
   z-index: 0;
+}
+
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-normal);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-toggle-icon {
+  font-size: 1.1rem;
+  transition: transform var(--transition-normal);
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+  transform: rotate(15deg);
 }
 
 .container {
@@ -103,6 +169,7 @@ body::after {
   box-shadow: var(--shadow-lg), var(--shadow-glow);
   position: relative;
   overflow: hidden;
+  transition: all var(--transition-normal);
 }
 
 .glass-card::before {
@@ -205,7 +272,7 @@ body::after {
   font-size: 2.5rem;
   font-weight: 700;
   margin-bottom: 12px;
-  background: linear-gradient(135deg, #fff 0%, #c7d2fe 50%, #a5b4fc 100%);
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-primary) 50%, var(--accent-secondary) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -260,7 +327,54 @@ body::after {
   .header h1 {
     font-size: 2rem;
   }
+
+  .theme-toggle {
+    top: 10px;
+    right: 10px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
 }
+`;
+
+const themeToggleScript = `
+(function() {
+  const THEME_KEY = 'omnibox-theme';
+  
+  function getTheme() {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved) return saved;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+    updateToggleIcon(theme);
+  }
+  
+  function updateToggleIcon(theme) {
+    const icon = document.querySelector('.theme-toggle-icon');
+    const text = document.querySelector('.theme-toggle-text');
+    if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    if (text) text.textContent = theme === 'dark' ? '浅色' : '深色';
+  }
+  
+  function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    setTheme(current === 'dark' ? 'light' : 'dark');
+  }
+  
+  setTheme(getTheme());
+  
+  window.addEventListener('DOMContentLoaded', function() {
+    const btn = document.querySelector('.theme-toggle');
+    if (btn) {
+      btn.addEventListener('click', toggleTheme);
+      updateToggleIcon(document.documentElement.getAttribute('data-theme') || 'dark');
+    }
+  });
+})();
 `;
 
 const mainPageStyles = `
@@ -665,6 +779,10 @@ export function getMainPageTemplate(): string {
   </style>
 </head>
 <body>
+  <button class="theme-toggle" type="button">
+    <span class="theme-toggle-icon">☀️</span>
+    <span class="theme-toggle-text">浅色</span>
+  </button>
   <div class="container">
     <div class="header">
       <h1>OmniBox</h1>
@@ -750,6 +868,8 @@ export function getMainPageTemplate(): string {
   </div>
 
   <script>
+    ${themeToggleScript}
+
     function redirectToProxy(event) {
       event.preventDefault();
       const targetUrl = document.getElementById('targetUrl').value.trim();
@@ -831,6 +951,10 @@ export function getPasswordPageTemplate(passwordCookieName: string): string {
   </style>
 </head>
 <body>
+  <button class="theme-toggle" type="button">
+    <span class="theme-toggle-icon">☀️</span>
+    <span class="theme-toggle-text">浅色</span>
+  </button>
   <div class="container">
     <div class="glass-card password-container">
       <div class="header">
@@ -871,6 +995,8 @@ export function getPasswordPageTemplate(passwordCookieName: string): string {
   </div>
 
   <script>
+    ${themeToggleScript}
+
     let isSubmitting = false;
     
     function submitPassword(event) {
@@ -1021,6 +1147,10 @@ export function getErrorPageTemplate(errorTitle: string, errorMessage: string, s
   </style>
 </head>
 <body>
+  <button class="theme-toggle" type="button">
+    <span class="theme-toggle-icon">☀️</span>
+    <span class="theme-toggle-text">浅色</span>
+  </button>
   <div class="container">
     <div class="glass-card">
       <div class="header">
@@ -1041,6 +1171,10 @@ export function getErrorPageTemplate(errorTitle: string, errorMessage: string, s
       </div>
     </div>
   </div>
+
+  <script>
+    ${themeToggleScript}
+  </script>
 </body>
 </html>
   `;

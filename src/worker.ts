@@ -4,7 +4,8 @@
 import { ProxyHandler } from './proxy.js';
 import { CacheManager } from './cache.js';
 import { CONFIG, type EnvVariables } from './config.js';
-import { getUnrestrictedCorsHeaders, generateRequestId, Logger } from './utils.js';
+import { getUnrestrictedCorsHeaders, generateRequestId, Logger, getHTMLResponse } from './utils.js';
+import { getErrorPageTemplate } from './templates.js';
 
 declare global {
   var thisProxyServerUrlHttps: string;
@@ -139,7 +140,7 @@ async function handleApiRequest(
     ...getUnrestrictedCorsHeaders()
   };
 
-  if (url.pathname === '/api/health' || url.pathname === '/_health') {
+  if (url.pathname === '/api/health') {
     const healthResponse: HealthCheckResponse = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -207,6 +208,10 @@ async function handleApiRequest(
     }
   }
 
+  if (url.pathname === '/api/cache/preload' && request.method === 'POST') {
+    return handlePreloadRequest(cacheManager, env);
+  }
+
   const notFoundResponse = {
     error: 'API endpoint not found'
   };
@@ -214,6 +219,48 @@ async function handleApiRequest(
     status: 404,
     headers
   });
+}
+
+async function handlePreloadRequest(cacheManager: CacheManager | null, _env: EnvVariables): Promise<Response> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...getUnrestrictedCorsHeaders()
+  };
+
+  if (!cacheManager) {
+    return new Response(JSON.stringify({ error: 'Cache not configured' }), {
+      status: 400,
+      headers
+    });
+  }
+
+  const preloadUrls = CONFIG.PERFORMANCE.PRELOAD_URLS;
+
+  if (!preloadUrls || preloadUrls.length === 0) {
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'No preload URLs configured',
+      preloaded: 0
+    }), { headers });
+  }
+
+  try {
+    await cacheManager.preloadUrls(preloadUrls);
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Preload completed',
+      preloaded: preloadUrls.length,
+      urls: preloadUrls
+    }), { headers });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      error: 'Preload failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }), {
+      status: 500,
+      headers
+    });
+  }
 }
 
 export default {
@@ -228,21 +275,14 @@ export default {
         stack: env.DEBUG === 'true' ? (error instanceof Error ? error.stack : undefined) : undefined
       });
 
-      const errorResponse = {
-        error: 'Proxy service error',
-        message: env.DEBUG === 'true' ? (error instanceof Error ? error.message : 'Unknown error') : 'Internal server error',
-        requestId: generateRequestId(),
-        version: CONFIG.VERSION,
-        timestamp: new Date().toISOString()
-      };
+      const errorMessage = env.DEBUG === 'true' 
+        ? (error instanceof Error ? error.message : 'Unknown error') 
+        : '服务暂时不可用，请稍后重试';
 
-      return new Response(JSON.stringify(errorResponse), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getUnrestrictedCorsHeaders()
-        }
-      });
+      return getHTMLResponse(
+        getErrorPageTemplate('服务错误', errorMessage, 500),
+        500
+      );
     }
   }
 };
