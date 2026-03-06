@@ -444,9 +444,7 @@ curl -X POST https://your-worker.workers.dev/api/cache/clear
 
 ## 🙏 致谢
 
-本项目基于 [cf-proxy-ex](https://github.com/1234567Yang/cf-proxy-ex) 进行增强改造，感谢原作者的开源贡献。
-
-cf-proxy-ex 是一个基于 Cloudflare Workers 的超级代理项目，支持无服务器代理、DuckDuckGo 代理、GitHub 加速等功能。
+本项目在实现过程中借鉴了 [cf-proxy-ex](https://github.com/1234567Yang/cf-proxy-ex) 的设计思路，感谢原作者的开源贡献。
 
 ---
 
