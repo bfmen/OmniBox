@@ -14,8 +14,8 @@ DEBUG = "false"
 LOG_LEVEL = "warn"
 
 # ==================== 安全配置 ====================
-# 代理访问密码，空字符串表示无需密码
-PROXY_PASSWORD = ""
+# 代理访问密码（密钥，仅通过 Cloudflare Dashboard 添加 Secret）
+# PROXY_PASSWORD
 
 # 是否显示密码输入页面：true(显示)/false(直接返回403)
 SHOW_PASSWORD_PAGE = "true"
@@ -60,5 +60,7 @@ enabled = true         # 启用 Cloudflare 的监控和日志功能
 
 # ==================== 注意事项 ====================
 # 1. 确保在 Cloudflare Dashboard 中已创建对应的 KV 命名空间
-# 2. 密码等敏感信息建议使用 secrets 管理: wrangler secret put PROXY_PASSWORD
+# 2. 配置管理规范：
+#    - 文本变量：仅在此文件中配置
+#    - 密钥(Secret)：仅通过 Cloudflare Dashboard 添加
 # 3. 缓存时间可根据实际业务需求调整
