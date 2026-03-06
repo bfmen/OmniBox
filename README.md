@@ -8,6 +8,7 @@
 
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare)](https://workers.cloudflare.com/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 [在线演示](https://omnibox.pp.ua/) · [快速开始](#-快速开始) · [功能特性](#-功能特性) · [API 文档](#-api-文档)
@@ -39,22 +40,23 @@
 | 🌐 **完整代理** | 支持代理任意网站，包括 HTML、CSS、JavaScript、图片、字体等所有资源 |
 | ⚡ **智能缓存** | 基于 Cloudflare KV 的智能缓存系统，支持按内容类型设置不同的 TTL |
 | 🔄 **URL 重写** | 自动重写页面中的所有 URL，确保代理后的链接正常工作 |
-| 🔐 **密码保护** | 可选的密码保护功能，支持自定义密码输入页面 |
+| 🔐 **密码保护** | 可选的密码保护功能，支持自定义密码输入页面，使用常量时间比较防止时序攻击 |
 | 📊 **健康监控** | 内置健康检查 API 和状态监控端点 |
-| 🎨 **现代化前端** | 深色主题设计，响应式布局，流畅的动画效果 |
+| 🎨 **现代化前端** | 深色/浅色主题设计，响应式布局，流畅的动画效果 |
 | 🇨🇳 **全中文界面** | 完整的中文界面，提升用户体验 |
 | 💬 **优化的提示系统** | 美观的代理提示组件，点击关闭后不再显示 |
 
 ### 技术亮点
 
-- **TypeScript 重构** - 完整的 TypeScript 类型支持，提升代码质量和开发体验
-- **零依赖** - 纯 TypeScript 实现，核心功能无需外部依赖
-- **模块化设计** - 清晰的代码架构，易于维护和扩展
-- **CORS 支持** - 完整的跨域资源共享支持
-- **性能优化** - 智能缓存策略，减少源站请求
-- **安全防护** - 爬虫过滤、内容过滤、速率限制
-- **代码质量** - 集成 ESLint 和 TypeScript 严格类型检查
-- **现代化前端** - 响应式设计，流畅的用户体验
+- **TypeScript 重构** - 完整的 TypeScript 类型支持，严格模式编译，提升代码质量和开发体验
+- **零运行时依赖** - 纯 TypeScript 实现，核心功能无需外部依赖，仅开发依赖
+- **模块化设计** - 清晰的代码架构，7个独立模块，职责分离，易于维护和扩展
+- **CORS 支持** - 完整的跨域资源共享支持，无限制 CORS 头
+- **性能优化** - 智能缓存策略，按内容类型 TTL，减少源站请求
+- **安全防护** - 爬虫过滤(Bytespider)、内容过滤、密码常量时间比较
+- **代码质量** - 集成 ESLint 9.x 和 TypeScript 5.9 严格类型检查
+- **现代化前端** - 响应式设计，深色/浅色主题切换，流畅的用户体验
+- **完整日志系统** - 分级日志(error/warn/info/debug)，支持请求追踪
 
 ---
 
@@ -87,15 +89,23 @@
 
 ### 模块说明
 
-| 模块 | 文件 | 职责 |
-|------|------|------|
-| 入口模块 | `worker.ts` | 请求路由、错误处理、缓存检查 |
-| 代理处理 | `proxy.ts` | URL 提取、请求转发、响应处理 |
-| 内容注入 | `injector.ts` | HTML 注入、URL 重写、脚本注入 |
-| 缓存管理 | `cache.ts` | KV 存储操作、TTL 管理、缓存清理 |
-| 配置中心 | `config.ts` | 全局配置、环境变量、功能开关 |
-| 页面模板 | `templates.ts` | 主页、密码页、错误页模板 |
-| 工具函数 | `utils.ts` | 通用工具、Cookie 处理、响应构建 |
+| 模块 | 文件 | 职责 | 主要功能 |
+|------|------|------|----------|
+| 入口模块 | `worker.ts` | 请求路由、错误处理、缓存检查 | API路由分发、全局错误捕获、请求ID生成 |
+| 代理处理 | `proxy.ts` | URL 提取、请求转发、响应处理 | 密码验证、URL规范化、重定向处理、Cookie处理 |
+| 内容注入 | `injector.ts` | HTML 注入、URL 重写、脚本注入 | Location代理、网络请求拦截、DOM观察器 |
+| 缓存管理 | `cache.ts` | KV 存储操作、TTL 管理、缓存清理 | 按内容类型TTL、缓存预热、统计信息 |
+| 配置中心 | `config.ts` | 全局配置、环境变量、功能开关 | 类型定义、默认值、常量管理 |
+| 页面模板 | `templates.ts` | 主页、密码页、错误页模板 | 响应式设计、主题切换、动画效果 |
+| 工具函数 | `utils.ts` | 通用工具、Cookie 处理、响应构建 | 日志系统、CORS头、请求ID |
+
+### 数据流
+
+```
+用户请求 → Worker入口 → 密码验证 → 缓存检查 → 代理请求 → 内容处理 → 缓存存储 → 响应返回
+                ↓           ↓           ↓           ↓
+              API路由    Cookie验证   KV读取    URL重写/注入
+```
 
 ---
 
@@ -161,19 +171,20 @@ https://your-worker.workers.dev/https://github.com
 | `DEBUG` | boolean | `false` | 启用调试模式，显示详细错误信息 |
 | `LOG_LEVEL` | string | `warn` | 日志级别：`error` / `warn` / `info` / `debug` |
 | `PROXY_PASSWORD` | Secret | - | 访问密码（仅通过 Cloudflare Dashboard 添加 Secret） |
-| `SHOW_PASSWORD_PAGE` | boolean | `true` | 是否显示密码输入页面 |
-| `MAX_CACHE_SIZE` | number | `1048576` | 单个缓存项最大大小（字节） |
+| `SHOW_PASSWORD_PAGE` | boolean | `true` | 是否显示密码输入页面，false则直接返回403 |
+| `MAX_CACHE_SIZE` | number | `1048576` | 单个缓存项最大大小（字节，默认1MB） |
 
 ### 缓存 TTL 配置
 
-| 内容类型 | 默认 TTL | 说明 |
-|----------|----------|------|
-| HTML | 1 小时 | 网页内容 |
-| CSS | 1 天 | 样式表 |
-| JavaScript | 1 天 | 脚本文件 |
-| 图片 | 30 天 | 图片资源 |
-| 字体 | 30 天 | 字体文件 |
-| JSON | 30 分钟 | API 响应 |
+| 内容类型 | 默认 TTL | 环境变量 | 说明 |
+|----------|----------|----------|------|
+| HTML | 1 小时 | `CACHE_HTML_TTL` | 网页内容 |
+| CSS | 1 天 | `CACHE_CSS_TTL` | 样式表 |
+| JavaScript | 1 天 | `CACHE_JS_TTL` | 脚本文件 |
+| 图片 | 30 天 | `CACHE_IMAGE_TTL` | 图片资源 |
+| 字体 | 30 天 | `CACHE_FONT_TTL` | 字体文件 |
+| JSON | 30 分钟 | `CACHE_JSON_TTL` | API 响应 |
+| 默认 | 1 小时 | `CACHE_DEFAULT_TTL` | 其他内容 |
 
 ### wrangler.toml 示例
 
@@ -187,6 +198,14 @@ compatibility_flags = ["nodejs_compat"]
 DEBUG = "false"
 LOG_LEVEL = "warn"
 MAX_CACHE_SIZE = "1048576"
+SHOW_PASSWORD_PAGE = "true"
+CACHE_HTML_TTL = "3600"
+CACHE_CSS_TTL = "86400"
+CACHE_JS_TTL = "86400"
+CACHE_IMAGE_TTL = "2592000"
+CACHE_FONT_TTL = "2592000"
+CACHE_JSON_TTL = "1800"
+CACHE_DEFAULT_TTL = "3600"
 
 [[kv_namespaces]]
 binding = "KV_CACHE"
@@ -214,10 +233,17 @@ GET /api/health
   "timestamp": "2024-01-01T00:00:00.000Z",
   "version": "1.0.0",
   "service": "OmniBox Proxy Worker",
+  "globals": {
+    "https": "https://your-worker.workers.dev/",
+    "host": "your-worker.workers.dev"
+  },
   "features": {
+    "enhancedProxyMode": true,
+    "originalFunctionality": true,
     "kvCache": true,
     "corsSupport": true,
-    "passwordProtection": false
+    "passwordProtection": false,
+    "proxyHint": true
   }
 }
 ```
@@ -236,7 +262,10 @@ GET /api/status
   "proxyMode": "omnibox-enhanced",
   "timestamp": 1704067200000,
   "version": "1.0.0",
-  "caching": true
+  "cors": "unrestricted",
+  "caching": true,
+  "passwordProtected": false,
+  "hintEnabled": true
 }
 ```
 
@@ -257,6 +286,23 @@ Content-Type: application/json
 {
   "success": true,
   "message": "Cache cleared successfully"
+}
+```
+
+### 预热缓存
+
+```http
+POST /api/cache/preload
+```
+
+**响应示例：**
+
+```json
+{
+  "success": true,
+  "message": "Preload completed",
+  "preloaded": 5,
+  "urls": ["https://example.com/..."]
 }
 ```
 
@@ -316,18 +362,20 @@ omnibox/
 │   └── workflows/
 │       └── deploy.yml          # CI/CD 配置
 ├── src/
-│   ├── worker.ts               # 主入口
-│   ├── config.ts               # 配置模块
-│   ├── proxy.ts                # 代理处理
-│   ├── cache.ts                # 缓存管理
-│   ├── injector.ts             # 内容注入
-│   ├── templates.ts            # 页面模板
-│   └── utils.ts                # 工具函数
-├── .eslintrc.js               # ESLint 配置
+│   ├── worker.ts               # 主入口 - 请求路由、API处理
+│   ├── config.ts               # 配置模块 - 常量、类型定义
+│   ├── proxy.ts                # 代理处理 - URL提取、请求转发
+│   ├── cache.ts                # 缓存管理 - KV操作、TTL管理
+│   ├── injector.ts             # 内容注入 - HTML处理、URL重写
+│   ├── templates.ts            # 页面模板 - 主页、密码页、错误页
+│   └── utils.ts                # 工具函数 - 日志、Cookie、响应构建
+JavaScript代码(参考)
+├── eslint.config.js            # ESLint 配置 (v9 flat config)
 ├── .gitignore
 ├── package.json
-├── tsconfig.json              # TypeScript 配置
+├── tsconfig.json               # TypeScript 配置 (strict mode)
 ├── wrangler.toml               # Worker 配置
+├── LICENSE                     # MIT License
 └── README.md
 ```
 
@@ -343,11 +391,14 @@ npm run dev
 ### 代码质量检查
 
 ```bash
-# 语法检查
+# ESLint 语法检查
 npm run lint
 
-# 类型检查
+# TypeScript 类型检查
 npm run typecheck
+
+# 详细类型检查
+npm run typecheck:verbose
 
 # 构建测试
 npm run build
@@ -362,6 +413,15 @@ npm run build
 DEBUG = "true"
 LOG_LEVEL = "debug"
 ```
+
+### 技术栈版本
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| TypeScript | 5.9.3 | 类型系统 |
+| Wrangler | 4.60.0 | Cloudflare Workers CLI |
+| ESLint | 10.0.2 | 代码检查 |
+| @cloudflare/workers-types | 20260305.1 | Workers 类型定义 |
 
 ---
 
@@ -386,10 +446,11 @@ LOG_LEVEL = "debug"
 ### 安全特性
 
 - ✅ 爬虫过滤（阻止 Bytespider 等恶意爬虫）
-- ✅ 内容类型过滤（阻止可执行文件下载）
+- ✅ 密码常量时间比较（防止时序攻击）
+- ✅ 内容类型过滤
 - ✅ CORS 安全配置
 - ✅ 密码保护机制
-- ✅ 速率限制支持
+- ✅ robots.txt 禁止爬取
 
 ---
 
@@ -432,6 +493,14 @@ curl -X POST https://your-worker.workers.dev/api/cache/clear
 - 文本内容（HTML、CSS、JavaScript、JSON、XML）
 - 二进制内容（图片、字体、视频、音频）
 - 其他资源（字体、图标等）
+</details>
+
+<details>
+<summary><b>Q: 如何添加自定义域名？</b></summary>
+
+1. 在 Cloudflare Dashboard → Workers → omnibox → Settings → Triggers
+2. 添加自定义域名
+3. 确保域名已托管在 Cloudflare
 </details>
 
 ---
