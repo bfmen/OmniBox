@@ -66,12 +66,12 @@ export class ContentInjector {
   replaceURLsInText(content: string): string {
     try {
       // 排除尾部标点符号（逗号、句号、括号、引号等），避免将非 URL 字符包含进改写结果
-      const urlRegex = /(https?:\/\/[^\s'"<>()\[\]{}|\\^`]+?)(?=[\s'"<>()\[\]{}|\\^`.,;:!?]|$)/g;
+      const urlRegex = /(https?:\/\/[^\s'"<>()[\]{}|\\^`]+?)(?=[\s'"<>()[\]{}|\\^`.,;:!?]|$)/g;
 
       return content.replaceAll(urlRegex, (match, p1, offset, string) => {
         const before = string.substring(Math.max(0, offset - 10), offset);
         if (before.includes('src="') || before.includes('href="') ||
-            before.includes("src='") || before.includes("href='")) {
+            before.includes('src=\'') || before.includes('href=\'')) {
           return match;
         }
         return `${(globalThis as any).thisProxyServerUrlHttps}${match}`;

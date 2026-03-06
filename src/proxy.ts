@@ -63,7 +63,7 @@ export class ProxyHandler {
 
     if (request.url.endsWith('favicon.ico')) {
       // 使用内嵌 SVG 避免请求外部域名（原跳转百度会泄漏用户 IP）
-      const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌐</text></svg>`;
+      const svgIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌐</text></svg>';
       return new Response(svgIcon, {
         headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' }
       });
@@ -305,7 +305,7 @@ export class ProxyHandler {
     let isHTML = false;
 
     const isTextContent = contentType.startsWith('text/');
-    const isPotentialHTML = contentType.includes('html') || 
+    const isPotentialHTML = contentType.includes('html') ||
                            contentType.includes('javascript') ||
                            contentType === '' ||
                            contentType === 'application/octet-stream' ||
@@ -324,7 +324,7 @@ export class ProxyHandler {
 
     if (response.body && (isTextContent || isPotentialHTML)) {
       let body = await response.text();
-      
+
       const actualContentType = this.detectActualContentType(body, contentType);
       isHTML = actualContentType.includes('text/html') && body.includes('<html');
 
@@ -340,7 +340,7 @@ export class ProxyHandler {
       }
 
       modifiedResponse = new Response(body, response);
-      
+
       if (contentType !== actualContentType && isHTML) {
         modifiedResponse.headers.set('Content-Type', 'text/html; charset=utf-8');
       }
