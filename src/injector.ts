@@ -67,7 +67,7 @@ export class ContentInjector {
     try {
       const urlRegex = /(https?:\/\/[^\s'"]+)/g;
 
-      return content.replaceAll(urlRegex, (match, offset, string) => {
+      return content.replaceAll(urlRegex, (match, p1, offset, string) => {
         const before = string.substring(Math.max(0, offset - 10), offset);
         if (before.includes('src="') || before.includes('href="')) {
           return match;
@@ -782,7 +782,7 @@ function replaceContentPaths(content) {
   // Replace URLs in content using compatible regex without lookbehind
   let regex = /(https?:\\/\\/[^\\s'"]+)/g;
   
-  content = content.replaceAll(regex, (match, offset, string) => {
+  content = content.replaceAll(regex, (match, p1, offset, string) => {
     // Check if URL is already inside src=" or href=" attribute
     const before = string.substring(Math.max(0, offset - 10), offset);
     if (before.includes('src="') || before.includes('href="')) {
