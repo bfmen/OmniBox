@@ -19,6 +19,7 @@
 
 ## 📖 目录
 
+- [项目简介](#-项目简介)
 - [功能特性](#-功能特性)
 - [技术架构](#-技术架构)
 - [快速开始](#-快速开始)
@@ -31,6 +32,18 @@
 
 ---
 
+## 📝 项目简介
+
+OmniBox 是一个基于 Cloudflare Workers 构建的通用 Web 代理服务，具有以下特点：
+
+- **零运行时依赖** - 纯 TypeScript 实现，核心功能无需外部依赖
+- **边缘计算** - 利用 Cloudflare 全球 CDN 网络，实现低延迟访问
+- **智能缓存** - 基于 Cloudflare KV 的多级缓存系统
+- **安全防护** - 内置 SSRF 防护、爬虫过滤、密码保护等安全机制
+- **完整代理** - 支持 HTML、CSS、JavaScript、图片、字体等所有资源类型
+
+---
+
 ## ✨ 功能特性
 
 ### 核心功能
@@ -40,27 +53,38 @@
 | 🌐 **完整代理** | 支持代理任意网站，包括 HTML、CSS、JavaScript、图片、字体等所有资源 |
 | ⚡ **智能缓存** | 基于 Cloudflare KV 的智能缓存系统，支持按内容类型设置不同的 TTL |
 | 🔄 **URL 重写** | 自动重写页面中的所有 URL，确保代理后的链接正常工作 |
-| 🔐 **密码保护** | 可选的密码保护功能，支持自定义密码输入页面，使用常量时间比较防止时序攻击 |
+| 🔐 **密码保护** | 可选的密码保护功能，支持自定义密码输入页面，使用 SHA-256 哈希 + 常量时间比较防止时序攻击 |
 | 📊 **健康监控** | 内置健康检查 API 和状态监控端点 |
 | 🎨 **现代化前端** | 深色/浅色主题设计，响应式布局，流畅的动画效果 |
 | 🇨🇳 **全中文界面** | 完整的中文界面，提升用户体验 |
 | 💬 **优化的提示系统** | 美观的代理提示组件，点击关闭后不再显示 |
 
+### 安全特性
+
+| 特性 | 说明 |
+|------|------|
+| 🛡️ **SSRF 防护** | 阻止内网 IP 访问（10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, IPv6 本地地址等） |
+| 🤖 **爬虫过滤** | 默认屏蔽 Bytespider、GPTBot、CCBot、SemrushBot、AhrefsBot 等恶意爬虫 |
+| ⏱️ **时序攻击防护** | 密码验证使用常量时间比较算法 |
+| 🔒 **Cookie 安全** | 内部 Cookie 使用 HttpOnly、Secure、SameSite=Lax 属性 |
+| 🚫 **敏感头移除** | 自动移除 CSP、HSTS、X-Frame-Options 等限制性响应头 |
+| 🔑 **API 鉴权** | 写操作 API 需要Bearer Token 鉴权 |
+
 ### 技术亮点
 
-- **TypeScript 重构** - 完整的 TypeScript 类型支持，严格模式编译，提升代码质量和开发体验
+- **TypeScript 严格模式** - 完整的 TypeScript 类型支持，严格模式编译，提升代码质量和开发体验
 - **零运行时依赖** - 纯 TypeScript 实现，核心功能无需外部依赖，仅开发依赖
-- **模块化设计** - 清晰的代码架构，7个独立模块，职责分离，易于维护和扩展
+- **模块化设计** - 清晰的代码架构，7 个独立模块，职责分离，易于维护和扩展
 - **CORS 支持** - 完整的跨域资源共享支持，无限制 CORS 头
-- **性能优化** - 智能缓存策略，按内容类型 TTL，减少源站请求
-- **安全防护** - 爬虫过滤(Bytespider/GPTBot/CCBot/SemrushBot/AhrefsBot)、内容过滤、密码常量时间比较
+- **性能优化** - 智能缓存策略、请求超时控制、响应体大小限制
+- **完整日志系统** - 分级日志（error/warn/info/debug），支持请求追踪
 - **代码质量** - 集成 ESLint 10.x 和 TypeScript 5.9 严格类型检查
-- **现代化前端** - 响应式设计，深色/浅色主题切换，流畅的用户体验
-- **完整日志系统** - 分级日志(error/warn/info/debug)，支持请求追踪
 
 ---
 
 ## 🏗️ 技术架构
+
+### 架构图
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -91,13 +115,13 @@
 
 | 模块 | 文件 | 职责 | 主要功能 |
 |------|------|------|----------|
-| 入口模块 | `worker.ts` | 请求路由、错误处理、缓存检查 | API路由分发、全局错误捕获、请求ID生成 |
-| 代理处理 | `proxy.ts` | URL 提取、请求转发、响应处理 | 密码验证、URL规范化、重定向处理、Cookie处理 |
-| 内容注入 | `injector.ts` | HTML 注入、URL 重写、脚本注入 | Location代理、网络请求拦截、DOM观察器 |
-| 缓存管理 | `cache.ts` | KV 存储操作、TTL 管理、缓存清理 | 按内容类型TTL、缓存预热、统计信息 |
+| 入口模块 | `worker.ts` | 请求路由、错误处理、缓存检查 | API 路由分发、全局错误捕获、请求 ID 生成、缓存命中/未命中处理 |
+| 代理处理 | `proxy.ts` | URL 提取、请求转发、响应处理 | 密码验证、URL 规范化、SSRF 防护、重定向处理、Cookie 路径修复 |
+| 内容注入 | `injector.ts` | HTML 注入、URL 重写、脚本注入 | ProxyLocation 类、XMLHttpRequest/Fetch 拦截、MutationObserver 监听 |
+| 缓存管理 | `cache.ts` | KV 存储操作、TTL 管理、缓存清理 | 按内容类型 TTL、缓存键 SHA-256 哈希、分页清除缓存 |
 | 配置中心 | `config.ts` | 全局配置、环境变量、功能开关 | 类型定义、默认值、常量管理 |
-| 页面模板 | `templates.ts` | 主页、密码页、错误页模板 | 响应式设计、主题切换、动画效果 |
-| 工具函数 | `utils.ts` | 通用工具、Cookie 处理、响应构建 | 日志系统、CORS头、请求ID |
+| 页面模板 | `templates.ts` | 主页、密码页、错误页模板 | 响应式设计、深色/浅色主题切换、动态缓存统计 |
+| 工具函数 | `utils.ts` | 通用工具、Cookie 处理、响应构建 | 分级日志系统、常量时间比较、SHA-256 哈希 |
 
 ### 数据流
 
@@ -110,15 +134,34 @@
 ### 核心技术实现
 
 #### 1. Location 对象代理
+
 通过 `ProxyLocation` 类包装原始 location 对象，拦截 `href`、`protocol`、`host` 等属性访问，使代理页面中的 JavaScript 获取正确的 URL 信息。
 
+```typescript
+class ProxyLocation {
+  get href() { return original_website_url_str; }
+  set href(url) { this.originalLocation.href = changeURL(url); }
+  // ... 其他属性
+}
+```
+
 #### 2. 网络请求拦截
+
 - **XMLHttpRequest.open 重写** - 拦截 XHR 请求，自动转换 URL
 - **fetch 方法重写** - 拦截 Fetch API 请求
 - **window.open 拦截** - 处理新窗口打开的链接
 
 #### 3. DOM 动态监听
-使用 MutationObserver 监听 DOM 变化，自动转换新插入元素的 URL，支持动态加载内容。
+
+使用 MutationObserver 监听 DOM 变化，自动转换新插入元素的 URL，支持动态加载内容。采用 100ms 防抖优化性能。
+
+#### 4. 缓存键生成策略
+
+```
+缓存键 = SHA-256(前缀|方法|URL|accept-language).slice(0, 48)
+```
+
+自动排除缓存破坏参数（`_t`、`timestamp`、`cachebuster` 等）。
 
 ---
 
@@ -184,9 +227,9 @@ https://your-worker.workers.dev/https://github.com
 | `DEBUG` | boolean | `false` | 启用调试模式，显示详细错误信息 |
 | `LOG_LEVEL` | string | `warn` | 日志级别：`error` / `warn` / `info` / `debug` |
 | `PROXY_PASSWORD` | Secret | - | 访问密码（仅通过 Cloudflare Dashboard 添加 Secret） |
-| `SHOW_PASSWORD_PAGE` | boolean | `true` | 是否显示密码输入页面，false则直接返回403 |
+| `SHOW_PASSWORD_PAGE` | boolean | `true` | 是否显示密码输入页面，false 则直接返回 403 |
 | `BLOCKED_UA_PATTERNS` | string | - | 爬虫黑名单（逗号分隔），默认已包含 Bytespider/GPTBot/CCBot/SemrushBot/AhrefsBot |
-| `MAX_CACHE_SIZE` | number | `1048576` | 单个缓存项最大大小（字节，默认1MB） |
+| `MAX_CACHE_SIZE` | number | `1048576` | 单个缓存项最大大小（字节，默认 1MB） |
 
 ### 缓存 TTL 配置
 
@@ -205,8 +248,10 @@ https://your-worker.workers.dev/https://github.com
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `MAX_REDIRECT_DEPTH` | 5 | 最大重定向深度 |
-| `REQUEST_TIMEOUT` | 30000ms | 请求超时时间 |
+| `REQUEST_TIMEOUT` | 15000ms | 请求超时时间 |
+| `STREAM_READ_TIMEOUT` | 10000ms | 流式读取超时时间 |
 | `MAX_RESPONSE_SIZE` | 50MB | 最大响应体大小 |
+| `MAX_TEXT_PROCESS_SIZE` | 5MB | 文本处理最大大小 |
 | `CONCURRENT_REQUESTS_LIMIT` | 10 | 并发请求限制 |
 
 ### wrangler.toml 示例
@@ -216,6 +261,7 @@ name = "omnibox"
 main = "src/worker.ts"
 compatibility_date = "2024-12-19"
 compatibility_flags = ["nodejs_compat"]
+preview_urls = false
 
 [vars]
 DEBUG = "false"
@@ -229,10 +275,12 @@ CACHE_IMAGE_TTL = "2592000"
 CACHE_FONT_TTL = "2592000"
 CACHE_JSON_TTL = "1800"
 CACHE_DEFAULT_TTL = "3600"
+BLOCKED_UA_PATTERNS = ""
 
 [[kv_namespaces]]
 binding = "KV_CACHE"
 id = "your-kv-namespace-id"
+preview_id = "your-kv-namespace-id"
 
 [observability]
 enabled = true
@@ -316,7 +364,7 @@ GET /api/cache/stats
   "timestamp": "2024-01-01T00:00:00.000Z",
   "hitCount": 0,
   "missCount": 0,
-  "hitRate": "0.00%"
+  "hitRate": "N/A"
 }
 ```
 
@@ -429,7 +477,7 @@ omnibox/
 │   ├── injector.ts             # 内容注入 - HTML处理、URL重写
 │   ├── templates.ts            # 页面模板 - 主页、密码页、错误页
 │   └── utils.ts                # 工具函数 - 日志、Cookie、响应构建
-├── eslint.config.js            # ESLint 配置 (v9 flat config)
+├── eslint.config.js            # ESLint 配置 (v10 flat config)
 ├── .gitignore
 ├── package.json
 ├── tsconfig.json               # TypeScript 配置 (strict mode)
@@ -505,14 +553,15 @@ LOG_LEVEL = "debug"
 
 ### 安全特性
 
+- ✅ SSRF 防护（阻止内网 IP 访问）
 - ✅ 爬虫过滤（阻止 Bytespider、GPTBot、CCBot、SemrushBot、AhrefsBot 等恶意爬虫）
 - ✅ 密码常量时间比较（防止时序攻击）
-- ✅ 内容类型过滤
+- ✅ 密码 SHA-256 哈希存储（Cookie 中存储哈希值而非明文）
 - ✅ CORS 安全配置
-- ✅ 密码保护机制
 - ✅ robots.txt 禁止爬取
 - ✅ 敏感请求头移除（CSP、HSTS、X-Frame-Options 等）
 - ✅ API 写操作鉴权（Bearer Token）
+- ✅ 内部 Cookie 过滤（不透传给上游站点）
 
 ### Cookie 安全
 
@@ -564,6 +613,8 @@ curl -X POST https://your-worker.workers.dev/api/cache/clear \
 - 文本内容（HTML、CSS、JavaScript、JSON、XML）
 - 二进制内容（图片、字体、视频、音频）
 - 其他资源（字体、图标等）
+
+注意：二进制内容（图片、字体等）不进行缓存，直接透传。
 </details>
 
 <details>
@@ -592,6 +643,15 @@ curl -X POST https://your-worker.workers.dev/api/cache/clear \
 BLOCKED_UA_PATTERNS = "MyBot,AnotherBot"
 ```
 这会追加到默认黑名单（Bytespider/GPTBot/CCBot/SemrushBot/AhrefsBot）之后。
+</details>
+
+<details>
+<summary><b>Q: 密码是如何存储和验证的？</b></summary>
+
+1. 用户输入密码后，客户端使用 SHA-256 对密码进行哈希
+2. 哈希值存储在 Cookie 中（而非明文密码）
+3. 服务端同样对 `PROXY_PASSWORD` 进行 SHA-256 哈希
+4. 使用常量时间比较算法比对两个哈希值，防止时序攻击
 </details>
 
 ---
