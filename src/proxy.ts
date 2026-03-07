@@ -339,7 +339,11 @@ export class ProxyHandler {
         body = this.injector.replaceURLsInText(body);
       }
 
+      // 用解码后的明文 body 构建响应时，必须去除原始的 Content-Encoding 和 Content-Length，
+      // 否则浏览器会把明文当作 gzip 等格式再次解码，导致乱码。
       modifiedResponse = new Response(body, response);
+      modifiedResponse.headers.delete('content-encoding');
+      modifiedResponse.headers.delete('content-length');
 
       if (isHTML) {
         // 确保 HTML 响应有正确的 Content-Type，防止浏览器 MIME 嗅探出错
@@ -400,47 +404,62 @@ export class ProxyHandler {
 
   private processCookies(response: Response, actualUrl: URL, isHTML: boolean, hasProxyHintCookie: boolean): void {
     const headers = response.headers;
-    const cookieHeaders: Array<{ headerName: string; headerValue: string }> = [];
 
-    for (const [key, value] of headers.entries()) {
-      if (key.toLowerCase() === 'set-cookie') {
-        cookieHeaders.push({ headerName: key, headerValue: value });
+    // 使用 getAll 正确获取所有 Set-Cookie header（CF Workers 支持）
+    // headers.entries() 对多个同名 header 可能只保留最后一个
+    let rawCookies: string[];
+    if (typeof (headers as any).getAll === 'function') {
+      rawCookies = (headers as any).getAll('set-cookie');
+    } else {
+      // 降级：从 entries 收集
+      rawCookies = [];
+      for (const [key, value] of headers.entries()) {
+        if (key.toLowerCase() === 'set-cookie') {
+          rawCookies.push(value);
+        }
       }
     }
 
-    cookieHeaders.forEach(cookieHeader => {
-      // 修复：直接用 split(',') 会把 expires 日期中的逗号（如 "Thu, 01 Jan..."）误作分隔符
-      const cookies = this.splitSetCookieHeader(cookieHeader.headerValue);
+    if (rawCookies.length > 0) {
+      // 删除原有 Set-Cookie，重新逐条 append
+      headers.delete('set-cookie');
 
-      for (let i = 0; i < cookies.length; i++) {
-        const parts = cookies[i].split(';').map(part => part.trim());
+      rawCookies.forEach(rawCookie => {
+        // 修复：直接用 split(',') 会把 expires 日期中的逗号（如 "Thu, 01 Jan..."）误作分隔符
+        const cookies = this.splitSetCookieHeader(rawCookie);
 
-        const pathIndex = parts.findIndex(part => part.toLowerCase().startsWith('path='));
-        let originalPath = '/';
-        if (pathIndex !== -1) {
-          originalPath = parts[pathIndex].substring('path='.length);
-        }
+        cookies.forEach(cookieStr => {
+          const parts = cookieStr.split(';').map(part => part.trim());
 
-        const absolutePath = '/' + new URL(originalPath, actualUrl.href).href;
+          // 修复 Cookie Path：将上游 path 转换为代理前缀路径
+          // 例如上游 path=/user → 代理 path=/https://github.com/user
+          const pathIndex = parts.findIndex(part => part.toLowerCase().startsWith('path='));
+          let originalPath = '/';
+          if (pathIndex !== -1) {
+            originalPath = parts[pathIndex].substring('path='.length) || '/';
+          }
+          // 拼接为代理路径：/origin + originalPath（确保 originalPath 以 / 开头）
+          const normalizedPath = originalPath.startsWith('/') ? originalPath : '/' + originalPath;
+          const proxyPath = '/' + actualUrl.origin + normalizedPath;
 
-        if (pathIndex !== -1) {
-          parts[pathIndex] = `Path=${absolutePath}`;
-        } else {
-          parts.push(`Path=${absolutePath}`);
-        }
+          if (pathIndex !== -1) {
+            parts[pathIndex] = `Path=${proxyPath}`;
+          } else {
+            parts.push(`Path=${proxyPath}`);
+          }
 
-        const domainIndex = parts.findIndex(part => part.toLowerCase().startsWith('domain='));
-        if (domainIndex !== -1) {
-          parts[domainIndex] = `domain=${(globalThis as any).thisProxyServerUrl_hostOnly}`;
-        } else {
-          parts.push(`domain=${(globalThis as any).thisProxyServerUrl_hostOnly}`);
-        }
+          // 将 domain 替换为代理域名
+          const domainIndex = parts.findIndex(part => part.toLowerCase().startsWith('domain='));
+          if (domainIndex !== -1) {
+            parts[domainIndex] = `Domain=${(globalThis as any).thisProxyServerUrl_hostOnly}`;
+          } else {
+            parts.push(`Domain=${(globalThis as any).thisProxyServerUrl_hostOnly}`);
+          }
 
-        cookies[i] = parts.join('; ');
-      }
-
-      headers.set(cookieHeader.headerName, cookies.join(', '));
-    });
+          headers.append('Set-Cookie', parts.join('; '));
+        });
+      });
+    }
 
     if (isHTML && response.status === 200) {
       // HttpOnly 防止代理页面 JS 读取访问历史；Secure 确保仅 HTTPS 传输
@@ -486,7 +505,7 @@ export class ProxyHandler {
     const headers = response.headers;
 
     headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('X-Frame-Options', 'ALLOWALL');
+    // X-Frame-Options 已在 REMOVE_HEADERS 中统一删除，此处不再重复设置
 
     CONFIG.HEADERS.REMOVE_HEADERS.forEach(header => {
       headers.delete(header);

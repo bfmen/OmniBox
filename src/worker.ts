@@ -49,10 +49,15 @@ interface CacheClearResponse {
 }
 
 async function getCacheKey(cacheManager: CacheManager, request: Request): Promise<string> {
+  // 只传入影响内容变体的 header（accept-language），避免 Cookie/Authorization 等敏感头进入 key
+  const relevantHeaders: Record<string, string> = {};
+  const lang = request.headers.get('accept-language');
+  if (lang) relevantHeaders['accept-language'] = lang;
+
   return cacheManager.generateCacheKey(
     request.url,
     request.method,
-    Object.fromEntries(request.headers.entries())
+    relevantHeaders
   );
 }
 
@@ -100,6 +105,29 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
       logger.debug('Cache hit', { cacheKey });
       return response;
     }
+
+    const originalResponse = await proxyHandler.handleRequest(request);
+
+    const newHeaders = new Headers(originalResponse.headers);
+    Object.entries(getUnrestrictedCorsHeaders()).forEach(([key, value]) => {
+      newHeaders.set(key, value);
+    });
+    newHeaders.set('X-Request-Id', requestId);
+
+    const finalResponse = new Response(originalResponse.body, {
+      status: originalResponse.status,
+      statusText: originalResponse.statusText,
+      headers: newHeaders
+    });
+
+    if (originalResponse.status >= 200 && originalResponse.status < 300) {
+      const responseForCache = finalResponse.clone();
+      cacheManager.set(cacheKey, responseForCache).catch(err => {
+        logger.error('Failed to cache response', { cacheKey, error: String(err) });
+      });
+    }
+
+    return finalResponse;
   }
 
   const originalResponse = await proxyHandler.handleRequest(request);
@@ -115,16 +143,6 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
     statusText: originalResponse.statusText,
     headers: newHeaders
   });
-
-  if (request.method === 'GET' && cacheManager &&
-      originalResponse.status >= 200 && originalResponse.status < 300) {
-    const responseForCache = finalResponse.clone();
-    const cacheKey = await getCacheKey(cacheManager, request);
-
-    cacheManager.set(cacheKey, responseForCache).catch(err => {
-      logger.error('Failed to cache response', { cacheKey, error: String(err) });
-    });
-  }
 
   return finalResponse;
 }

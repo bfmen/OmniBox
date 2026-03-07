@@ -138,9 +138,17 @@ export class CacheManager {
       }
 
       this.hitCount++;
+      // 修复：缓存存储的 body 是已解码的文本（response.text()），
+      // 恢复时必须去掉 Content-Encoding（如 gzip）和 Content-Length，
+      // 否则浏览器会尝试再次解码明文，导致乱码或解析失败。
+      const restoredHeaders = { ...cached.headers };
+      delete restoredHeaders['content-encoding'];
+      delete restoredHeaders['Content-Encoding'];
+      delete restoredHeaders['content-length'];
+      delete restoredHeaders['Content-Length'];
       return {
         body: cached.body,
-        headers: cached.headers,
+        headers: restoredHeaders,
         status: cached.status || 200,
         statusText: cached.statusText || 'OK',
         cachedAt: cached.cachedAt,
@@ -198,9 +206,15 @@ export class CacheManager {
 
       const ttl = customTTL || this.getTTLForContentType(contentType);
 
+      // 存储前去掉 Content-Encoding 和 Content-Length：
+      // body 已用 .text() 解码为明文，恢复时不应再带编码信息
+      const headersToStore = Object.fromEntries(response.headers.entries());
+      delete headersToStore['content-encoding'];
+      delete headersToStore['content-length'];
+
       const cacheData: CacheData = {
         body: body,
-        headers: Object.fromEntries(response.headers.entries()),
+        headers: headersToStore,
         status: response.status,
         statusText: response.statusText,
         expires: Date.now() + (ttl * 1000),

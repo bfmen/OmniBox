@@ -925,11 +925,9 @@ export function getMainPageTemplate(): string {
 
       input.focus();
 
-      input.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-          document.querySelector('.btn').click();
-        }
-      });
+      // 不再手动监听 Enter 触发 .btn.click()，
+      // input 在 form 内按 Enter 浏览器会自动触发 form 的 submit 事件，
+      // 手动 .click() 会导致 submit 触发两次，打开两个相同页面。
 
       input.addEventListener('input', function() {
         const value = this.value.trim();

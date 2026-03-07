@@ -600,7 +600,14 @@ function obsPage() {
     debounceTimer = setTimeout(function() {
       // Process all pending mutations at once
       pendingMutations.forEach(function(mutation) {
-        traverseAndConvert(mutation);
+        // Handle attribute changes on the target element
+        if (mutation.type === 'attributes' && mutation.target instanceof HTMLElement) {
+          traverseAndConvert(mutation.target);
+        }
+        // Handle newly added nodes
+        mutation.addedNodes.forEach(function(node) {
+          traverseAndConvert(node);
+        });
       });
       pendingMutations = [];
       debounceTimer = null;
