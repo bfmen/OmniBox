@@ -317,17 +317,23 @@ export class ProxyHandler {
     const chunks: Uint8Array[] = [];
     let totalSize = 0;
     const readTimeout = 10000; // 10 秒读取超时
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Read timeout')), readTimeout);
+    });
+
+    const clearReadTimeout = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
 
     try {
-      // 使用 Promise.race 实现读取超时
-      const readWithTimeout = async (): Promise<string> => {
+      const readPromise = async (): Promise<string> => {
         while (true) {
-          const readPromise = reader.read();
-          const timeoutPromise = new Promise<{ done: true; value: undefined }>((_, reject) => {
-            setTimeout(() => reject(new Error('Read timeout')), readTimeout);
-          });
-
-          const { done, value } = await Promise.race([readPromise, timeoutPromise]) as any;
+          const { done, value } = await reader.read();
 
           if (done) break;
 
@@ -349,8 +355,9 @@ export class ProxyHandler {
         return new TextDecoder().decode(combined);
       };
 
-      return await readWithTimeout();
+      return await Promise.race([readPromise(), timeoutPromise]);
     } finally {
+      clearReadTimeout();
       reader.releaseLock();
     }
   }
@@ -412,21 +419,9 @@ export class ProxyHandler {
     let modifiedResponse: Response;
     let isHTML = false;
 
+    // 简化判断逻辑，与 _worker.js 保持一致
+    // 只处理 text/ 开头的 Content-Type，避免处理非文本响应
     const isTextContent = contentType.startsWith('text/');
-
-    // octet-stream 需要特殊处理：只有当 URL 后缀明确为脚本文件时，才尝试读文本做 JS 升级。
-    // 否则直接 passthrough，避免 .text() 破坏字体/PDF/二进制下载文件的内容。
-    const urlPath = actualUrl.pathname.toLowerCase();
-    const isLikelyScriptByUrl = /\.(js|mjs|ts|jsx|tsx|cjs)([?#]|$)/.test(urlPath);
-    const isOctetStream = contentType === 'application/octet-stream';
-    const isTypescript = contentType.includes('application/x-typescript') ||
-                         contentType.includes('application/typescript');
-
-    const isPotentialHTML = contentType.includes('html') ||
-                           contentType.includes('javascript') ||
-                           contentType === '' ||
-                           (isOctetStream && isLikelyScriptByUrl) || // octet-stream 仅在 URL 像脚本时才读文本
-                           isTypescript;
 
     // 响应体大小预检：超出 MAX_RESPONSE_SIZE 直接透传，避免 Worker 内存溢出
     const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
@@ -446,7 +441,7 @@ export class ProxyHandler {
     }
 
     // 对于没有 content-length 的响应，使用流式读取并限制大小
-    if (response.body && (isTextContent || isPotentialHTML)) {
+    if (response.body && isTextContent) {
       // 克隆 body，以便在读取失败时可以降级透传
       const [bodyForRead, bodyForFallback] = response.body.tee();
 
@@ -464,24 +459,17 @@ export class ProxyHandler {
         return passthrough;
       }
 
-      const actualContentType = this.detectActualContentType(body, contentType);
+      // 与 _worker.js 保持一致的判断逻辑
+      isHTML = contentType.includes('text/html') && body.includes('<html');
 
-      // isHTML 的判断必须同时满足：
-      // 1. detectActualContentType 升级到 text/html（contentType 为空或 octet-stream 时才会发生）
-      // 2. body 真的包含 <html 标签
-      // 关键：如果上游声明了明确的非 HTML 类型（text/css、application/json 等），
-      // detectActualContentType 会直接 return 原始类型，actualContentType 不含 text/html，
-      // 所以 isHTML 永远为 false，不会强制覆盖 Content-Type。
-      isHTML = actualContentType.includes('text/html') && body.includes('<html');
-
-      if (actualContentType.includes('html') || actualContentType.includes('javascript')) {
+      if (contentType.includes('html') || contentType.includes('javascript')) {
         body = body.replaceAll('window.location', `window.${CONFIG.REPLACE_URL_OBJ}`);
         body = body.replaceAll('document.location', `document.${CONFIG.REPLACE_URL_OBJ}`);
       }
 
       if (isHTML) {
         body = await this.injector.injectHTML(body, actualUrl.href, hasProxyHintCookie);
-      } else if (isTextContent || actualContentType.includes('javascript')) {
+      } else {
         body = this.injector.replaceURLsInText(body);
       }
 
@@ -494,9 +482,6 @@ export class ProxyHandler {
       if (isHTML) {
         // 确保 HTML 响应有正确的 Content-Type，防止浏览器 MIME 嗅探出错
         modifiedResponse.headers.set('Content-Type', 'text/html; charset=utf-8');
-      } else if (!contentType && actualContentType && actualContentType !== 'text/plain') {
-        // contentType 为空时，补全由 detectActualContentType 推断出的类型
-        modifiedResponse.headers.set('Content-Type', actualContentType);
       }
       // 注意：contentType 有值（如 text/css）时不做任何 set，保持原始 Content-Type 不变
     } else {
