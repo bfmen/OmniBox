@@ -67,18 +67,17 @@ export class ContentInjector {
 
   replaceURLsInText(content: string): string {
     try {
-      // 使用原始宽松正则匹配完整 URL（含路径、查询参数），再对结果做尾部标点清理
-      // 不能在字符集里加 . 否则会截断域名（example.com -> example）
-      const urlRegex = /(https?:\/\/[^\s'"]+)/g;
+      const proxyHttps = (globalThis as any).thisProxyServerUrlHttps;
+      if (!proxyHttps) return content;
 
-      return content.replaceAll(urlRegex, (match, p1, offset, string) => {
+      // 处理绝对 URL (https:// 或 http://)
+      const urlRegex = /(https?:\/\/[^\s'"]+)/g;
+      content = content.replaceAll(urlRegex, (match, p1, offset, string) => {
         const before = string.substring(Math.max(0, offset - 10), offset);
         if (before.includes('src="') || before.includes('href="') ||
             before.includes('src=\'') || before.includes('href=\'')) {
           return match;
         }
-        // 裁掉尾部独立标点（逗号、句号、分号等），但保留 URL 路径中合法的标点
-        // 括号：只有找不到配对的左括号时才裁掉尾部右括号
         let url = match;
         while (url.length > 0) {
           const last = url[url.length - 1];
@@ -90,8 +89,19 @@ export class ContentInjector {
             break;
           }
         }
-        return `${(globalThis as any).thisProxyServerUrlHttps}${url}`;
+        return `${proxyHttps}${url}`;
       });
+
+      // 处理 CSS 中的协议相对 URL: url(//example.com/...)
+      // 注意：只处理 url() 函数内的协议相对 URL
+      const cssProtoRelativeRegex = /url\(\s*(['"])?(\/\/[^'")\s]+)\1\s*\)/gi;
+      content = content.replaceAll(cssProtoRelativeRegex, (match, quote, urlPath) => {
+        // 将协议相对 URL 转换为 https 绝对 URL，然后代理
+        const absoluteUrl = `https:${urlPath}`;
+        return `url(${quote || ''}${proxyHttps}${absoluteUrl}${quote || ''})`;
+      });
+
+      return content;
     } catch (error) {
       console.error('URL replacement error:', error);
       return content;

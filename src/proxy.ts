@@ -274,6 +274,17 @@ export class ProxyHandler {
       modifiedHeaders.set(key, newValue);
     });
 
+    // 设置正确的 Referer 头，避免上游服务器因 Referer 校验拒绝请求
+    // 某些资源服务器（如 CDN）会验证 Referer 是否来自同域
+    if (!modifiedHeaders.has('Referer')) {
+      modifiedHeaders.set('Referer', actualUrl.origin + '/');
+    }
+
+    // 设置 Origin 头，某些 API 服务器需要验证
+    if (!modifiedHeaders.has('Origin')) {
+      modifiedHeaders.set('Origin', actualUrl.origin);
+    }
+
     return modifiedHeaders;
   }
 
