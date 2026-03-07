@@ -1,5 +1,5 @@
-// Configuration and Constants Module
-// Centralized configuration for OmniBox Proxy Worker
+// 配置与常量模块
+// OmniBox 代理 Worker 的集中化配置
 
 export interface CacheTTLConfig {
   HTML: number;
@@ -14,7 +14,9 @@ export interface CacheTTLConfig {
 export interface PerformanceConfig {
   MAX_REDIRECT_DEPTH: number;
   REQUEST_TIMEOUT: number;
+  STREAM_READ_TIMEOUT: number;
   MAX_RESPONSE_SIZE: number;
+  MAX_TEXT_PROCESS_SIZE: number;
   CONCURRENT_REQUESTS_LIMIT: number;
   PRELOAD_URLS: string[];
 }
@@ -115,8 +117,10 @@ Crawl-delay: 10
 
   PERFORMANCE: {
     MAX_REDIRECT_DEPTH: 5,
-    REQUEST_TIMEOUT: 15000,  // 缩短到 15 秒，避免慢速资源卡住页面
-    MAX_RESPONSE_SIZE: 50 * 1024 * 1024,
+    REQUEST_TIMEOUT: 15000,  // 请求超时（毫秒）
+    STREAM_READ_TIMEOUT: 10000,  // 流式读取超时（毫秒）
+    MAX_RESPONSE_SIZE: 50 * 1024 * 1024,  // 最大响应体大小（50MB）
+    MAX_TEXT_PROCESS_SIZE: 5 * 1024 * 1024,  // 文本处理最大大小（5MB）
     CONCURRENT_REQUESTS_LIMIT: 10,
     PRELOAD_URLS: []
   },

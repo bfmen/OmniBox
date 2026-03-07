@@ -1,5 +1,5 @@
-// Enhanced Proxy Handler - Core Proxy Logic
-// Handles all proxy-related functionality for OmniBox
+// 增强型代理处理器 - 核心代理逻辑
+// 处理 OmniBox 所有代理相关功能
 
 import { CONFIG, type EnvVariables } from './config.js';
 import { ContentInjector } from './injector.js';
@@ -139,7 +139,7 @@ export class ProxyHandler {
         extractedUrl = decodedUrl;
       }
     } catch {
-      // URL 解码失败，保持原样
+      // URL 解码失败，保持原样继续处理
     }
 
     return extractedUrl;
@@ -316,7 +316,7 @@ export class ProxyHandler {
     const reader = body.getReader();
     const chunks: Uint8Array[] = [];
     let totalSize = 0;
-    const readTimeout = 10000; // 10 秒读取超时
+    const readTimeout = CONFIG.PERFORMANCE.STREAM_READ_TIMEOUT;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -428,9 +428,9 @@ export class ProxyHandler {
     const maxSize = CONFIG.PERFORMANCE.MAX_RESPONSE_SIZE;
     const isLargeFile = contentLength > 0 && contentLength > maxSize;
 
-    // 对于 JS/CSS 等文本资源，如果文件过大（>5MB），直接透传避免内存问题
+    // 对于 JS/CSS 等文本资源，如果文件过大，直接透传避免内存问题
     // 同时也避免处理超大 JS 文件导致的超时
-    const maxTextProcessSize = 5 * 1024 * 1024; // 5MB
+    const maxTextProcessSize = CONFIG.PERFORMANCE.MAX_TEXT_PROCESS_SIZE;
     const isTooLargeForTextProcessing = contentLength > maxTextProcessSize;
 
     if (isLargeFile || isTooLargeForTextProcessing) {
@@ -446,7 +446,7 @@ export class ProxyHandler {
       const [bodyForRead, bodyForFallback] = response.body.tee();
 
       // 安全读取文本，限制最大大小防止内存溢出
-      const maxSafeTextSize = 5 * 1024 * 1024; // 5MB
+      const maxSafeTextSize = CONFIG.PERFORMANCE.MAX_TEXT_PROCESS_SIZE;
       let body: string;
 
       try {
@@ -493,47 +493,6 @@ export class ProxyHandler {
     this.removeRestrictiveHeaders(modifiedResponse, hasProxyHintCookie);
 
     return modifiedResponse;
-  }
-
-  private detectActualContentType(body: string, declaredContentType: string): string {
-    if (declaredContentType.includes('text/html')) {
-      return declaredContentType;
-    }
-
-    // 已有明确的非 HTML content-type 时，直接沿用，不做任何升级
-    // 防止 CSS/JS/JSON 文件被误判为 text/html，导致浏览器 MIME 检查失败（ERR: not a supported stylesheet MIME type）
-    if (declaredContentType &&
-        declaredContentType !== 'application/octet-stream' &&
-        !declaredContentType.includes('application/x-typescript') &&
-        !declaredContentType.includes('application/typescript')) {
-      return declaredContentType;
-    }
-
-    const trimmedBody = body.trim();
-
-    // 只有在 contentType 完全未声明（空串）时，才凭结构特征升级为 HTML。
-    // octet-stream / typescript 类型不在此处升级为 HTML（它们会在下方尝试升级为 JS）。
-    // 这防止了上游用 octet-stream 返回 HTML 错误页时，代理错误地注入 JS 脚本的问题。
-    if (!declaredContentType &&
-        (trimmedBody.startsWith('<!DOCTYPE') ||
-         trimmedBody.startsWith('<html') ||
-         trimmedBody.startsWith('<HTML') ||
-         (trimmedBody.startsWith('<') && trimmedBody.includes('<head') && trimmedBody.includes('<body')))) {
-      return 'text/html; charset=utf-8';
-    }
-
-    // JS 类型升级：必须上游已声明为 octet-stream 或 typescript，不凭内容特征猜测
-    if (declaredContentType === 'application/octet-stream' ||
-        declaredContentType.includes('application/x-typescript') ||
-        declaredContentType.includes('application/typescript')) {
-      if (trimmedBody.startsWith('<script') || trimmedBody.startsWith('(function') ||
-          trimmedBody.startsWith('!function') || trimmedBody.startsWith('define(') ||
-          trimmedBody.startsWith('export ') || trimmedBody.startsWith('import ')) {
-        return 'application/javascript; charset=utf-8';
-      }
-    }
-
-    return declaredContentType || 'text/plain';
   }
 
   private processCookies(response: Response, actualUrl: URL, isHTML: boolean, hasProxyHintCookie: boolean): void {

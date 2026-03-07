@@ -1,5 +1,5 @@
-// Content Injection Handler - Page and Script Injection Logic
-// Handles HTML content injection and URL rewriting for OmniBox
+// 内容注入处理器 - 页面与脚本注入逻辑
+// 处理 OmniBox 的 HTML 内容注入和 URL 重写
 
 import { CONFIG } from './config.js';
 

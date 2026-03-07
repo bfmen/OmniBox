@@ -1,5 +1,5 @@
-// OmniBox Proxy Worker v1.0.0 - Main Entry Point
-// Universal Web Proxy Service
+// OmniBox 代理 Worker v1.0.0 - 主入口
+// 通用网络代理服务
 
 import { ProxyHandler } from './proxy.js';
 import { CacheManager } from './cache.js';
@@ -264,8 +264,6 @@ async function handleApiRequest(
     headers
   });
 }
-
-// constantTimeEqual imported from utils.js
 
 async function handlePreloadRequest(cacheManager: CacheManager | null): Promise<Response> {
   const headers = createJsonHeaders();

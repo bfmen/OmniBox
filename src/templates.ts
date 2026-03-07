@@ -1,5 +1,5 @@
-// HTML Templates Module - All page templates in one place
-// Enhanced and optimized templates with modern design for OmniBox
+// HTML 模板模块 - 所有页面模板集中管理
+// OmniBox 增强优化的现代化设计模板
 
 import { CONFIG } from './config.js';
 

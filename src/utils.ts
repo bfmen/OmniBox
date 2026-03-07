@@ -1,5 +1,5 @@
-// Utility Functions Module
-// Common helper functions used across the OmniBox proxy worker
+// 工具函数模块
+// OmniBox 代理 Worker 通用的辅助函数
 
 import { CONFIG, type EnvVariables } from './config.js';
 

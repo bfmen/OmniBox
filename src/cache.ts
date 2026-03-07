@@ -1,5 +1,5 @@
-// Enhanced Cache Manager for Cloudflare KV Storage
-// Handles intelligent caching with TTL based on content types
+// 增强型缓存管理器 - Cloudflare KV 存储
+// 基于内容类型的智能 TTL 缓存处理
 
 import { CONFIG, type EnvVariables, type CacheTTLConfig } from './config.js';
 import { Logger, sha256Hex } from './utils.js';
