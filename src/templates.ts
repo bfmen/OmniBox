@@ -93,7 +93,7 @@ body::before {
   left: 0;
   right: 0;
   bottom: 0;
-  background:
+  background: 
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, var(--gradient-opacity-1)), transparent),
     radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139, 92, 246, var(--gradient-opacity-2)), transparent),
     radial-gradient(ellipse 40% 30% at 10% 60%, rgba(168, 85, 247, var(--gradient-opacity-3)), transparent);
@@ -318,12 +318,12 @@ body::after {
   body {
     padding: 15px;
   }
-
+  
   .glass-card {
     padding: 30px 20px;
     border-radius: var(--radius-lg);
   }
-
+  
   .header h1 {
     font-size: 2rem;
   }
@@ -340,33 +340,33 @@ body::after {
 const themeToggleScript = `
 (function() {
   const THEME_KEY = 'omnibox-theme';
-
+  
   function getTheme() {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved) return saved;
     return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
-
+  
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(THEME_KEY, theme);
     updateToggleIcon(theme);
   }
-
+  
   function updateToggleIcon(theme) {
     const icon = document.querySelector('.theme-toggle-icon');
     const text = document.querySelector('.theme-toggle-text');
     if (icon) icon.textContent = theme === 'dark' ? '☀️' : '🌙';
     if (text) text.textContent = theme === 'dark' ? '浅色' : '深色';
   }
-
+  
   function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
     setTheme(current === 'dark' ? 'light' : 'dark');
   }
-
+  
   setTheme(getTheme());
-
+  
   window.addEventListener('DOMContentLoaded', function() {
     const btn = document.querySelector('.theme-toggle');
     if (btn) {
@@ -622,29 +622,29 @@ body {
   .container {
     padding: 20px 15px;
   }
-
+  
   .proxy-card {
     padding: 24px;
     border-radius: var(--radius-lg);
   }
-
+  
   .header h1 {
     font-size: 2rem;
   }
-
+  
   .features-grid {
     grid-template-columns: 1fr;
   }
-
+  
   .stats-bar {
     flex-direction: column;
     gap: 16px;
   }
-
+  
   .proxy-form {
     padding: 20px;
   }
-
+  
   .usage-example {
     font-size: 0.8rem;
     padding: 12px 16px;
@@ -652,12 +652,12 @@ body {
     overflow-wrap: break-word;
     white-space: normal;
   }
-
+  
   .form-input {
     font-size: 0.9rem;
     padding: 14px 16px;
   }
-
+  
   .form-input::placeholder {
     font-size: 0.85rem;
   }
@@ -818,9 +818,9 @@ export function getMainPageTemplate(): string {
       <form class="proxy-form" onsubmit="redirectToProxy(event)">
         <div class="form-group">
           <label class="form-label" for="targetUrl">输入目标网址</label>
-          <input
-            type="text"
-            id="targetUrl"
+          <input 
+            type="text" 
+            id="targetUrl" 
             class="form-input"
             placeholder="例如：github.com 或 https://github.com"
             autocomplete="off"
@@ -832,14 +832,14 @@ export function getMainPageTemplate(): string {
         <button type="submit" class="btn">开始代理访问</button>
       </form>
 
-      <div class="stats-bar" id="statsBar">
+      <div class="stats-bar">
         <div class="stat-item">
-          <div class="stat-value" id="statTotalKeys">—</div>
-          <div class="stat-label">缓存条目数</div>
+          <div class="stat-value">99.9%</div>
+          <div class="stat-label">服务可用率</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value" id="statHitRate">—</div>
-          <div class="stat-label">缓存命中率</div>
+          <div class="stat-value">&lt;100ms</div>
+          <div class="stat-label">平均响应时间</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">全球</div>
@@ -853,19 +853,19 @@ export function getMainPageTemplate(): string {
           <div class="feature-title">完整代理</div>
           <div class="feature-desc">全面代理网站内容，包括 JavaScript、CSS 等所有资源文件</div>
         </div>
-
+        
         <div class="feature-item">
           <span class="feature-icon">⚡</span>
           <div class="feature-title">智能缓存</div>
           <div class="feature-desc">支持 KV 缓存加速，提升访问速度和用户体验</div>
         </div>
-
+        
         <div class="feature-item">
           <span class="feature-icon">🔄</span>
           <div class="feature-title">URL 重写</div>
           <div class="feature-desc">智能 URL 重写系统，确保所有链接正常工作</div>
         </div>
-
+        
         <div class="feature-item">
           <span class="feature-icon">📊</span>
           <div class="feature-title">健康监控</div>
@@ -890,45 +890,47 @@ export function getMainPageTemplate(): string {
     function redirectToProxy(event) {
       event.preventDefault();
       const targetUrl = document.getElementById('targetUrl').value.trim();
-
+      
       if (!targetUrl) {
         showError('请输入网站地址');
         return;
       }
-
+      
       if (!targetUrl.includes('.')) {
         showError('请输入有效的网站地址');
         return;
       }
-
+      
       const currentOrigin = window.location.origin;
       const proxyUrl = currentOrigin + '/' + targetUrl;
-
+      
       window.open(proxyUrl, '_blank');
     }
 
     function showError(message) {
       const existing = document.querySelector('.toast-error');
       if (existing) existing.remove();
-
+      
       const toast = document.createElement('div');
       toast.className = 'toast-error';
       toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,rgba(239,68,68,0.95),rgba(220,38,38,0.95));color:#fff;padding:14px 24px;border-radius:12px;font-size:0.9rem;z-index:10000;box-shadow:0 8px 30px rgba(0,0,0,0.3);animation:slideDown 0.3s ease;';
       toast.textContent = message;
       document.body.appendChild(toast);
-
+      
       setTimeout(() => toast.remove(), 3000);
     }
 
     document.addEventListener('DOMContentLoaded', function() {
       const input = document.getElementById('targetUrl');
-
+      
       input.focus();
-
-      // 不再手动监听 Enter 触发 .btn.click()，
-      // input 在 form 内按 Enter 浏览器会自动触发 form 的 submit 事件，
-      // 手动 .click() 会导致 submit 触发两次，打开两个相同页面。
-
+      
+      input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          document.querySelector('.btn').click();
+        }
+      });
+      
       input.addEventListener('input', function() {
         const value = this.value.trim();
         if (value && !value.includes('.')) {
@@ -944,22 +946,6 @@ export function getMainPageTemplate(): string {
     const style = document.createElement('style');
     style.textContent = '@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
     document.head.appendChild(style);
-
-    // 动态拉取缓存统计数据，替换假数据
-    async function loadCacheStats() {
-      try {
-        const res = await fetch('/api/cache/stats');
-        if (!res.ok) return;
-        const data = await res.json();
-        const totalKeysEl = document.getElementById('statTotalKeys');
-        const hitRateEl = document.getElementById('statHitRate');
-        if (totalKeysEl) totalKeysEl.textContent = data.error ? '—' : String(data.totalKeys ?? '—');
-        if (hitRateEl) hitRateEl.textContent = data.error ? '—' : (data.hitRate ?? '—');
-      } catch (_) {
-        // 接口不可用时保持 "—" 占位，不影响页面功能
-      }
-    }
-    document.addEventListener('DOMContentLoaded', loadCacheStats);
   </script>
 </body>
 </html>
@@ -994,17 +980,17 @@ export function getPasswordPageTemplate(passwordCookieName: string): string {
         <p class="subtitle">请输入访问密码以继续使用 OmniBox 服务</p>
         <div class="version-badge">OmniBox v${CONFIG.VERSION}</div>
       </div>
-
+      
       <form id="passwordForm" onsubmit="submitPassword(event)">
         <div id="errorMessage" class="error-message">
           密码错误，请重试
         </div>
-
+        
         <div class="form-group">
           <label class="form-label" for="password">访问密码</label>
-          <input
-            type="password"
-            id="password"
+          <input 
+            type="password" 
+            id="password" 
             name="password"
             class="form-input"
             placeholder="请输入访问密码"
@@ -1013,12 +999,12 @@ export function getPasswordPageTemplate(passwordCookieName: string): string {
             autofocus
           >
         </div>
-
+        
         <button type="submit" class="btn" id="submitBtn">
           <span id="submitText">验证并继续</span>
         </button>
       </form>
-
+      
       <div class="password-hint">
         输入正确的访问密码即可使用代理服务
       </div>
@@ -1029,89 +1015,81 @@ export function getPasswordPageTemplate(passwordCookieName: string): string {
     ${themeToggleScript}
 
     let isSubmitting = false;
-
-    async function submitPassword(event) {
+    
+    function submitPassword(event) {
       event.preventDefault();
-
+      
       if (isSubmitting) return;
-
+      
       const password = document.getElementById('password').value.trim();
       const submitBtn = document.getElementById('submitBtn');
       const submitText = document.getElementById('submitText');
       const errorMessage = document.getElementById('errorMessage');
-
+      
       if (!password) {
         showError('请输入密码');
         return;
       }
-
+      
       isSubmitting = true;
       submitBtn.classList.add('loading');
       submitText.textContent = '验证中...';
       errorMessage.style.display = 'none';
-
+      
       try {
-        // 客户端对密码做 SHA-256 哈希后再存入 Cookie，避免明文密码暴露
-        const encoder = new TextEncoder();
-        const data = encoder.encode(password);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashHex = Array.from(new Uint8Array(hashBuffer))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-
         const cookieDomain = window.location.hostname;
         const oneWeekLater = new Date();
         oneWeekLater.setTime(oneWeekLater.getTime() + (7 * 24 * 60 * 60 * 1000));
-
+        
         document.cookie = "${passwordCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + cookieDomain;
-
-        document.cookie = "${passwordCookieName}=" + hashHex +
-          "; expires=" + oneWeekLater.toUTCString() +
+        
+        document.cookie = "${passwordCookieName}=" + encodeURIComponent(password) + 
+          "; expires=" + oneWeekLater.toUTCString() + 
           "; path=/; domain=" + cookieDomain + "; SameSite=Lax; Secure";
-
+        
         setTimeout(() => {
           location.reload();
         }, 500);
-
+        
       } catch (error) {
         console.error('Cookie setting failed:', error);
         showError('认证失败，请重试');
         resetSubmitButton();
       }
     }
-
+    
     function showError(message) {
       const errorMessage = document.getElementById('errorMessage');
       errorMessage.textContent = message;
       errorMessage.style.display = 'flex';
-
+      
       setTimeout(() => {
         errorMessage.style.display = 'none';
       }, 3000);
     }
-
+    
     function resetSubmitButton() {
       isSubmitting = false;
       const submitBtn = document.getElementById('submitBtn');
       const submitText = document.getElementById('submitText');
-
+      
       submitBtn.classList.remove('loading');
       submitText.textContent = '验证并继续';
     }
-
+    
     document.getElementById('password').addEventListener('keypress', function(e) {
       if (e.key === 'Enter' && !isSubmitting) {
         submitPassword(e);
       }
     });
-
+    
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('error') === 'invalid_password') {
       setTimeout(() => {
         showError('密码错误，请重试');
       }, 100);
     }
-
+    
     document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('password').focus();
     });
@@ -1199,7 +1177,7 @@ export function getErrorPageTemplate(errorTitle: string, errorMessage: string, s
         <p class="subtitle">${errorMessage}</p>
         <div class="version-badge">OmniBox v${CONFIG.VERSION}</div>
       </div>
-
+      
       <div class="error-actions">
         <button class="btn btn-secondary" onclick="window.history.back()">
           返回上页

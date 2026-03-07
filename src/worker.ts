@@ -4,7 +4,7 @@
 import { ProxyHandler } from './proxy.js';
 import { CacheManager } from './cache.js';
 import { CONFIG, type EnvVariables } from './config.js';
-import { getUnrestrictedCorsHeaders, generateRequestId, Logger, getHTMLResponse, createJsonHeaders, constantTimeEqual } from './utils.js';
+import { getUnrestrictedCorsHeaders, generateRequestId, Logger, getHTMLResponse, createJsonHeaders } from './utils.js';
 import { getErrorPageTemplate } from './templates.js';
 
 declare global {
@@ -48,16 +48,11 @@ interface CacheClearResponse {
   error?: string;
 }
 
-async function getCacheKey(cacheManager: CacheManager, request: Request): Promise<string> {
-  // 只传入影响内容变体的 header（accept-language），避免 Cookie/Authorization 等敏感头进入 key
-  const relevantHeaders: Record<string, string> = {};
-  const lang = request.headers.get('accept-language');
-  if (lang) relevantHeaders['accept-language'] = lang;
-
+function getCacheKey(cacheManager: CacheManager, request: Request): string {
   return cacheManager.generateCacheKey(
     request.url,
     request.method,
-    relevantHeaders
+    Object.fromEntries(request.headers.entries())
   );
 }
 
@@ -87,7 +82,7 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
   }
 
   if (request.method === 'GET' && cacheManager) {
-    const cacheKey = await getCacheKey(cacheManager, request);
+    const cacheKey = getCacheKey(cacheManager, request);
 
     const cached = await cacheManager.get(cacheKey);
     if (cached) {
@@ -105,29 +100,6 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
       logger.debug('Cache hit', { cacheKey });
       return response;
     }
-
-    const originalResponse = await proxyHandler.handleRequest(request);
-
-    const newHeaders = new Headers(originalResponse.headers);
-    Object.entries(getUnrestrictedCorsHeaders()).forEach(([key, value]) => {
-      newHeaders.set(key, value);
-    });
-    newHeaders.set('X-Request-Id', requestId);
-
-    const finalResponse = new Response(originalResponse.body, {
-      status: originalResponse.status,
-      statusText: originalResponse.statusText,
-      headers: newHeaders
-    });
-
-    if (originalResponse.status >= 200 && originalResponse.status < 300) {
-      const responseForCache = finalResponse.clone();
-      cacheManager.set(cacheKey, responseForCache).catch(err => {
-        logger.error('Failed to cache response', { cacheKey, error: String(err) });
-      });
-    }
-
-    return finalResponse;
   }
 
   const originalResponse = await proxyHandler.handleRequest(request);
@@ -144,6 +116,16 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
     headers: newHeaders
   });
 
+  if (request.method === 'GET' && cacheManager &&
+      originalResponse.status >= 200 && originalResponse.status < 300) {
+    const responseForCache = finalResponse.clone();
+    const cacheKey = getCacheKey(cacheManager, request);
+
+    cacheManager.set(cacheKey, responseForCache).catch(err => {
+      logger.error('Failed to cache response', { cacheKey, error: String(err) });
+    });
+  }
+
   return finalResponse;
 }
 
@@ -154,26 +136,6 @@ async function handleApiRequest(
   cacheManager: CacheManager | null
 ): Promise<Response> {
   const headers = createJsonHeaders();
-
-  // 写操作（POST）需要鉴权：使用 PROXY_PASSWORD 作为 Bearer Token
-  // GET 类读接口（health/status/stats）保持公开，便于监控系统访问
-  const isMutationEndpoint = request.method === 'POST' &&
-    (url.pathname === '/api/cache/clear' || url.pathname === '/api/cache/preload');
-
-  if (isMutationEndpoint) {
-    const expectedPassword = env.PROXY_PASSWORD || CONFIG.DEFAULT_PASSWORD;
-    if (expectedPassword) {
-      const authHeader = request.headers.get('Authorization') || '';
-      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-      // 使用常量时间比较防止时序攻击
-      if (!constantTimeEqual(token, expectedPassword)) {
-        return new Response(JSON.stringify({ error: 'Unauthorized', message: '需要有效的 Authorization: Bearer <password> 头' }), {
-          status: 401,
-          headers
-        });
-      }
-    }
-  }
 
   if (url.pathname === '/api/health') {
     const healthResponse: HealthCheckResponse = {
@@ -247,15 +209,6 @@ async function handleApiRequest(
     return handlePreloadRequest(cacheManager);
   }
 
-  if (url.pathname === '/api/cache/stats' && request.method === 'GET') {
-    if (cacheManager) {
-      const stats = await cacheManager.getStats();
-      return new Response(JSON.stringify(stats), { headers });
-    } else {
-      return new Response(JSON.stringify({ error: 'Cache not configured' }), { status: 400, headers });
-    }
-  }
-
   const notFoundResponse = {
     error: 'API endpoint not found'
   };
@@ -264,8 +217,6 @@ async function handleApiRequest(
     headers
   });
 }
-
-// constantTimeEqual imported from utils.js
 
 async function handlePreloadRequest(cacheManager: CacheManager | null): Promise<Response> {
   const headers = createJsonHeaders();

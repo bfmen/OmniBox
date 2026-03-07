@@ -3,46 +3,6 @@
 
 import { CONFIG, type EnvVariables } from './config.js';
 
-/**
- * 常量时间字符串比较，防止时序攻击。
- * 统一实现，供 worker.ts 和 proxy.ts 共同使用。
- */
-export function constantTimeEqual(a: string, b: string): boolean {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const lenA = a.length;
-  const lenB = b.length;
-  let result = lenA ^ lenB;
-  const minLen = Math.min(lenA, lenB);
-  for (let i = 0; i < minLen; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
-}
-
-/**
- * 对密码做 SHA-256 哈希，返回 hex 字符串。
- * 用于 Cookie 中存储的是哈希值而非明文，提升密码安全性。
- */
-export async function hashPassword(password: string): Promise<string> {
-  const data = new TextEncoder().encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-/**
- * 对字符串做 SHA-256 哈希，返回截断后的 hex 字符串（用于 Cache Key）。
- */
-export async function sha256Hex(input: string, length: number = 48): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, length);
-}
-
 export interface CorsHeaders {
   'Access-Control-Allow-Origin': string;
   'Access-Control-Allow-Methods': string;

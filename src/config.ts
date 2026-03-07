@@ -51,11 +51,11 @@ export interface EnvVariables {
   ENVIRONMENT?: string;
   PROXY_PASSWORD?: string;
   MAX_CACHE_SIZE?: string;
+  ENABLE_DEBUG?: string;
   KV_CACHE?: KVNamespace;
   DEBUG?: string;
   LOG_LEVEL?: string;
   SHOW_PASSWORD_PAGE?: string;
-  BLOCKED_UA_PATTERNS?: string;
   CACHE_HTML_TTL?: string;
   CACHE_CSS_TTL?: string;
   CACHE_JS_TTL?: string;

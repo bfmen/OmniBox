@@ -2,7 +2,7 @@
 // Handles intelligent caching with TTL based on content types
 
 import { CONFIG, type EnvVariables, type CacheTTLConfig } from './config.js';
-import { Logger, sha256Hex } from './utils.js';
+import { Logger } from './utils.js';
 
 export interface CacheData {
   body: string;
@@ -20,9 +20,6 @@ export interface CacheStats {
   cachePrefix: string;
   ttlConfig: CacheTTLConfig;
   timestamp: string;
-  hitCount: number;
-  missCount: number;
-  hitRate: string;
   error?: string;
 }
 
@@ -31,10 +28,6 @@ export class CacheManager {
   private env: EnvVariables;
   private defaultTTL: CacheTTLConfig;
   private logger: Logger;
-  // hitCount/missCount 为请求级统计（CacheManager 每次请求重新实例化），
-  // 不跨请求累积，仅供本次请求内部参考。真实命中率需通过 Cloudflare Analytics 查看。
-  private hitCount: number = 0;
-  private missCount: number = 0;
 
   constructor(kv: KVNamespace | null, env: EnvVariables) {
     this.kv = kv;
@@ -58,7 +51,7 @@ export class CacheManager {
     return this.kv;
   }
 
-  async generateCacheKey(url: string, method: string = 'GET', headers: Record<string, string> = {}): Promise<string> {
+  generateCacheKey(url: string, method: string = 'GET', headers: Record<string, string> = {}): string {
     try {
       const normalizedUrl = new URL(url);
 
@@ -70,28 +63,21 @@ export class CacheManager {
       const keyComponents = [
         CONFIG.CACHE_PREFIX,
         method.toUpperCase(),
-        normalizedUrl.href
+        normalizedUrl.href.substring(0, 200)
       ];
 
-      // 仅用 accept-language 区分内容变体，排除 user-agent 避免命中率崩溃
-      const relevantHeaders = ['accept-language'];
+      const relevantHeaders = ['accept', 'accept-encoding', 'user-agent'];
       relevantHeaders.forEach(headerName => {
         const headerValue = headers[headerName];
         if (headerValue) {
-          keyComponents.push(`${headerName}:${headerValue.substring(0, 30)}`);
+          keyComponents.push(`${headerName}:${headerValue.substring(0, 50)}`);
         }
       });
 
-      // 对完整 Key 做 SHA-256 哈希，避免超出 KV 512 字节键名上限
-      const raw = keyComponents.join('|');
-      const hash = await sha256Hex(raw, 48);
-      return `${CONFIG.CACHE_PREFIX}:${hash}`;
+      return keyComponents.join('|');
     } catch (error) {
       this.logger.error('Cache key generation error', { error: String(error), url: url.substring(0, 100) });
-      // 降级：对原始字符串哈希
-      const fallbackRaw = `${CONFIG.CACHE_PREFIX}|${method}|${url}`;
-      const hash = await sha256Hex(fallbackRaw, 48);
-      return `${CONFIG.CACHE_PREFIX}:${hash}`;
+      return `${CONFIG.CACHE_PREFIX}|${method}|${url.substring(0, 200)}`;
     }
   }
 
@@ -117,38 +103,24 @@ export class CacheManager {
 
     try {
       const cached = await kv.get(cacheKey, 'json') as CacheData | null;
-      if (!cached) {
-        this.missCount++;
-        return null;
-      }
+      if (!cached) return null;
 
       if (cached.expires && Date.now() > cached.expires) {
         kv.delete(cacheKey).catch(err => {
           this.logger.error('Failed to delete expired cache', { cacheKey, error: String(err) });
         });
-        this.missCount++;
         return null;
       }
 
       if (!cached.body || !cached.headers) {
         this.logger.warn('Invalid cache structure, deleting', { cacheKey });
         kv.delete(cacheKey).catch(() => {});
-        this.missCount++;
         return null;
       }
 
-      this.hitCount++;
-      // 修复：缓存存储的 body 是已解码的文本（response.text()），
-      // 恢复时必须去掉 Content-Encoding（如 gzip）和 Content-Length，
-      // 否则浏览器会尝试再次解码明文，导致乱码或解析失败。
-      const restoredHeaders = { ...cached.headers };
-      delete restoredHeaders['content-encoding'];
-      delete restoredHeaders['Content-Encoding'];
-      delete restoredHeaders['content-length'];
-      delete restoredHeaders['Content-Length'];
       return {
         body: cached.body,
-        headers: restoredHeaders,
+        headers: cached.headers,
         status: cached.status || 200,
         statusText: cached.statusText || 'OK',
         cachedAt: cached.cachedAt,
@@ -158,7 +130,6 @@ export class CacheManager {
       };
     } catch (error) {
       this.logger.error('Cache get error', { cacheKey, error: String(error) });
-      this.missCount++;
       return null;
     }
   }
@@ -172,28 +143,12 @@ export class CacheManager {
         return;
       }
 
-      const contentType = response.headers.get('content-type') || '';
+      const maxSize = parseInt(this.env.MAX_CACHE_SIZE || String(CONFIG.MAX_CACHE_SIZE), 10);
       const cacheControl = response.headers.get('cache-control') || '';
 
       if (cacheControl.includes('private') || cacheControl.includes('no-store')) {
         return;
       }
-
-      // 跳过二进制内容：图片/字体/音视频用 .text() 读取会损坏数据
-      const isBinary = /^(image|audio|video|font)\//i.test(contentType) ||
-                       contentType.includes('application/octet-stream') ||
-                       contentType.includes('application/wasm') ||
-                       contentType.includes('application/pdf') ||
-                       contentType.includes('woff') ||
-                       contentType.includes('ttf') ||
-                       contentType.includes('otf') ||
-                       contentType.includes('eot');
-      if (isBinary) {
-        this.logger.debug('Skipping cache for binary content', { contentType });
-        return;
-      }
-
-      const maxSize = parseInt(this.env.MAX_CACHE_SIZE || String(CONFIG.MAX_CACHE_SIZE), 10);
 
       const responseClone = response.clone();
       const body = await responseClone.text();
@@ -204,17 +159,12 @@ export class CacheManager {
         return;
       }
 
+      const contentType = response.headers.get('content-type') || '';
       const ttl = customTTL || this.getTTLForContentType(contentType);
-
-      // 存储前去掉 Content-Encoding 和 Content-Length：
-      // body 已用 .text() 解码为明文，恢复时不应再带编码信息
-      const headersToStore = Object.fromEntries(response.headers.entries());
-      delete headersToStore['content-encoding'];
-      delete headersToStore['content-length'];
 
       const cacheData: CacheData = {
         body: body,
-        headers: headersToStore,
+        headers: Object.fromEntries(response.headers.entries()),
         status: response.status,
         statusText: response.statusText,
         expires: Date.now() + (ttl * 1000),
@@ -241,23 +191,15 @@ export class CacheManager {
     try {
       this.logger.info('Clearing cache pattern', { pattern });
 
-      // 支持 KV 分页游标，避免超过 1000 条时清除不完整
-      let cursor: string | undefined;
-      let totalDeleted = 0;
+      const list = await kv.list({ prefix: pattern });
+      const deletePromises = list.keys.map(key =>
+        kv.delete(key.name).catch(err => {
+          this.logger.error('Failed to delete cache key', { key: key.name, error: String(err) });
+        })
+      );
 
-      do {
-        const listResult = await kv.list({ prefix: pattern, cursor });
-        const deletePromises = listResult.keys.map(key =>
-          kv.delete(key.name).catch(err => {
-            this.logger.error('Failed to delete cache key', { key: key.name, error: String(err) });
-          })
-        );
-        await Promise.allSettled(deletePromises);
-        totalDeleted += listResult.keys.length;
-        cursor = listResult.list_complete ? undefined : (listResult as any).cursor;
-      } while (cursor);
-
-      this.logger.info('Cleared cache entries', { count: totalDeleted });
+      await Promise.allSettled(deletePromises);
+      this.logger.info('Cleared cache entries', { count: list.keys.length });
 
     } catch (error) {
       this.logger.error('Cache clear error', { pattern, error: String(error) });
@@ -278,34 +220,17 @@ export class CacheManager {
         totalKeys: 0,
         cachePrefix: CONFIG.CACHE_PREFIX,
         ttlConfig: this.defaultTTL,
-        hitCount: this.hitCount,
-        missCount: this.missCount,
-        hitRate: this.hitCount + this.missCount > 0
-          ? ((this.hitCount / (this.hitCount + this.missCount)) * 100).toFixed(1) + '%'
-          : 'N/A',
         timestamp: new Date().toISOString()
       };
     }
 
     try {
-      // 支持 KV 分页，正确统计所有缓存条目数量
-      let cursor: string | undefined;
-      let totalKeys = 0;
+      const list = await kv.list({ prefix: CONFIG.CACHE_PREFIX });
 
-      do {
-        const listResult = await kv.list({ prefix: CONFIG.CACHE_PREFIX, cursor });
-        totalKeys += listResult.keys.length;
-        cursor = listResult.list_complete ? undefined : (listResult as any).cursor;
-      } while (cursor);
-
-      const total = this.hitCount + this.missCount;
       const stats: CacheStats = {
-        totalKeys,
+        totalKeys: list.keys.length,
         cachePrefix: CONFIG.CACHE_PREFIX,
         ttlConfig: this.defaultTTL,
-        hitCount: this.hitCount,
-        missCount: this.missCount,
-        hitRate: total > 0 ? ((this.hitCount / total) * 100).toFixed(1) + '%' : 'N/A',
         timestamp: new Date().toISOString()
       };
 
@@ -318,9 +243,6 @@ export class CacheManager {
         totalKeys: 0,
         cachePrefix: CONFIG.CACHE_PREFIX,
         ttlConfig: this.defaultTTL,
-        hitCount: this.hitCount,
-        missCount: this.missCount,
-        hitRate: 'N/A',
         timestamp: new Date().toISOString()
       };
     }
@@ -338,7 +260,7 @@ export class CacheManager {
       try {
         const response = await fetch(url);
         if (response.ok) {
-          const cacheKey = await this.generateCacheKey(url, 'GET');
+          const cacheKey = this.generateCacheKey(url, 'GET');
           await this.set(cacheKey, response);
         }
       } catch (error) {
