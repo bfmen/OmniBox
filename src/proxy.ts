@@ -309,6 +309,53 @@ export class ProxyHandler {
   }
 
   /**
+   * 安全读取响应体文本，限制最大大小和读取时间，防止内存溢出和卡死。
+   * 当响应体超过 maxSize 或读取超时时抛出错误，调用方应降级为透传。
+   */
+  private async safeReadText(body: ReadableStream<Uint8Array>, maxSize: number): Promise<string> {
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
+    const readTimeout = 10000; // 10 秒读取超时
+
+    try {
+      // 使用 Promise.race 实现读取超时
+      const readWithTimeout = async (): Promise<string> => {
+        while (true) {
+          const readPromise = reader.read();
+          const timeoutPromise = new Promise<{ done: true; value: undefined }>((_, reject) => {
+            setTimeout(() => reject(new Error('Read timeout')), readTimeout);
+          });
+
+          const { done, value } = await Promise.race([readPromise, timeoutPromise]) as any;
+
+          if (done) break;
+
+          totalSize += value.length;
+          if (totalSize > maxSize) {
+            throw new Error(`Response body exceeds maximum size (${maxSize} bytes)`);
+          }
+          chunks.push(value);
+        }
+
+        // 合并所有 chunks 并解码
+        const combined = new Uint8Array(totalSize);
+        let offset = 0;
+        for (const chunk of chunks) {
+          combined.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        return new TextDecoder().decode(combined);
+      };
+
+      return await readWithTimeout();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
    * 根据请求 URL 的文件后缀推断期望的 Content-Type。
    * 用于修正「上游返回 4xx/5xx + text/html 错误页」但实际是 CSS/JS/字体等资源的情况，
    * 避免浏览器因 MIME type mismatch 拒绝加载样式/脚本。
@@ -384,15 +431,38 @@ export class ProxyHandler {
     // 响应体大小预检：超出 MAX_RESPONSE_SIZE 直接透传，避免 Worker 内存溢出
     const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
     const maxSize = CONFIG.PERFORMANCE.MAX_RESPONSE_SIZE;
-    if (contentLength > 0 && contentLength > maxSize) {
+    const isLargeFile = contentLength > 0 && contentLength > maxSize;
+
+    // 对于 JS/CSS 等文本资源，如果文件过大（>5MB），直接透传避免内存问题
+    // 同时也避免处理超大 JS 文件导致的超时
+    const maxTextProcessSize = 5 * 1024 * 1024; // 5MB
+    const isTooLargeForTextProcessing = contentLength > maxTextProcessSize;
+
+    if (isLargeFile || isTooLargeForTextProcessing) {
       const passthrough = new Response(response.body, response);
       this.processCookies(passthrough, actualUrl, false, hasProxyHintCookie);
       this.removeRestrictiveHeaders(passthrough, hasProxyHintCookie);
       return passthrough;
     }
 
+    // 对于没有 content-length 的响应，使用流式读取并限制大小
     if (response.body && (isTextContent || isPotentialHTML)) {
-      let body = await response.text();
+      // 克隆 body，以便在读取失败时可以降级透传
+      const [bodyForRead, bodyForFallback] = response.body.tee();
+
+      // 安全读取文本，限制最大大小防止内存溢出
+      const maxSafeTextSize = 5 * 1024 * 1024; // 5MB
+      let body: string;
+
+      try {
+        body = await this.safeReadText(bodyForRead, maxSafeTextSize);
+      } catch {
+        // 如果读取失败（文件过大），使用备份的 body 透传
+        const passthrough = new Response(bodyForFallback, response);
+        this.processCookies(passthrough, actualUrl, false, hasProxyHintCookie);
+        this.removeRestrictiveHeaders(passthrough, hasProxyHintCookie);
+        return passthrough;
+      }
 
       const actualContentType = this.detectActualContentType(body, contentType);
 
