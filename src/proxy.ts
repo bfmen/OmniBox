@@ -319,7 +319,7 @@ export class ProxyHandler {
       '.woff2': 'font/woff2',
       '.ttf':   'font/ttf',
       '.otf':   'font/otf',
-      '.eot':   'application/vnd.ms-fontobject',
+      '.eot':   'application/vnd.ms-fontobject'
     };
     for (const [ext, ct] of Object.entries(extMap)) {
       if (lower.endsWith(ext)) return ct;
