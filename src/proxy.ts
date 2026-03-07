@@ -305,12 +305,20 @@ export class ProxyHandler {
     let isHTML = false;
 
     const isTextContent = contentType.startsWith('text/');
+
+    // octet-stream 需要特殊处理：只有当 URL 后缀明确为脚本文件时，才尝试读文本做 JS 升级。
+    // 否则直接 passthrough，避免 .text() 破坏字体/PDF/二进制下载文件的内容。
+    const urlPath = actualUrl.pathname.toLowerCase();
+    const isLikelyScriptByUrl = /\.(js|mjs|ts|jsx|tsx|cjs)([?#]|$)/.test(urlPath);
+    const isOctetStream = contentType === 'application/octet-stream';
+    const isTypescript = contentType.includes('application/x-typescript') ||
+                         contentType.includes('application/typescript');
+
     const isPotentialHTML = contentType.includes('html') ||
                            contentType.includes('javascript') ||
                            contentType === '' ||
-                           contentType === 'application/octet-stream' ||
-                           contentType.includes('application/x-typescript') ||
-                           contentType.includes('application/typescript');
+                           (isOctetStream && isLikelyScriptByUrl) || // octet-stream 仅在 URL 像脚本时才读文本
+                           isTypescript;
 
     // 响应体大小预检：超出 MAX_RESPONSE_SIZE 直接透传，避免 Worker 内存溢出
     const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
@@ -326,6 +334,13 @@ export class ProxyHandler {
       let body = await response.text();
 
       const actualContentType = this.detectActualContentType(body, contentType);
+
+      // isHTML 的判断必须同时满足：
+      // 1. detectActualContentType 升级到 text/html（contentType 为空或 octet-stream 时才会发生）
+      // 2. body 真的包含 <html 标签
+      // 关键：如果上游声明了明确的非 HTML 类型（text/css、application/json 等），
+      // detectActualContentType 会直接 return 原始类型，actualContentType 不含 text/html，
+      // 所以 isHTML 永远为 false，不会强制覆盖 Content-Type。
       isHTML = actualContentType.includes('text/html') && body.includes('<html');
 
       if (actualContentType.includes('html') || actualContentType.includes('javascript')) {
@@ -349,9 +364,10 @@ export class ProxyHandler {
         // 确保 HTML 响应有正确的 Content-Type，防止浏览器 MIME 嗅探出错
         modifiedResponse.headers.set('Content-Type', 'text/html; charset=utf-8');
       } else if (!contentType && actualContentType && actualContentType !== 'text/plain') {
-        // contentType 为空时补全推断出的类型，避免浏览器 MIME 嗅探
+        // contentType 为空时，补全由 detectActualContentType 推断出的类型
         modifiedResponse.headers.set('Content-Type', actualContentType);
       }
+      // 注意：contentType 有值（如 text/css）时不做任何 set，保持原始 Content-Type 不变
     } else {
       modifiedResponse = new Response(response.body, response);
     }
@@ -379,12 +395,14 @@ export class ProxyHandler {
 
     const trimmedBody = body.trim();
 
-    // 只有在 contentType 完全未声明或为二进制/typescript 时，才凭结构特征做升级判断
-    // 必须同时满足 DOCTYPE/html 标签 + head + body，确保是真正的 HTML 文档
-    if (trimmedBody.startsWith('<!DOCTYPE') ||
-        trimmedBody.startsWith('<html') ||
-        trimmedBody.startsWith('<HTML') ||
-        (trimmedBody.startsWith('<') && trimmedBody.includes('<head') && trimmedBody.includes('<body'))) {
+    // 只有在 contentType 完全未声明（空串）时，才凭结构特征升级为 HTML。
+    // octet-stream / typescript 类型不在此处升级为 HTML（它们会在下方尝试升级为 JS）。
+    // 这防止了上游用 octet-stream 返回 HTML 错误页时，代理错误地注入 JS 脚本的问题。
+    if (!declaredContentType &&
+        (trimmedBody.startsWith('<!DOCTYPE') ||
+         trimmedBody.startsWith('<html') ||
+         trimmedBody.startsWith('<HTML') ||
+         (trimmedBody.startsWith('<') && trimmedBody.includes('<head') && trimmedBody.includes('<body')))) {
       return 'text/html; charset=utf-8';
     }
 
