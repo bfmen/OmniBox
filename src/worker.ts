@@ -61,7 +61,7 @@ async function getCacheKey(cacheManager: CacheManager, request: Request): Promis
   );
 }
 
-async function handleRequest(request: Request, env: EnvVariables): Promise<Response> {
+async function handleRequest(request: Request, env: EnvVariables, ctx: ExecutionContext): Promise<Response> {
   const logger = Logger.create('Worker', env);
   const requestId = generateRequestId();
   logger.setRequestId(requestId);
@@ -83,7 +83,7 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
   }
 
   if (url.pathname.startsWith('/api/')) {
-    return handleApiRequest(url, request, env, cacheManager);
+    return handleApiRequest(url, request, env, cacheManager, ctx);
   }
 
   if (request.method === 'GET' && cacheManager) {
@@ -122,9 +122,11 @@ async function handleRequest(request: Request, env: EnvVariables): Promise<Respo
 
     if (originalResponse.status >= 200 && originalResponse.status < 300) {
       const responseForCache = finalResponse.clone();
-      cacheManager.set(cacheKey, responseForCache).catch(err => {
-        logger.error('Failed to cache response', { cacheKey, error: String(err) });
-      });
+      ctx.waitUntil(
+        cacheManager.set(cacheKey, responseForCache).catch(err => {
+          logger.error('Failed to cache response', { cacheKey, error: String(err) });
+        })
+      );
     }
 
     return finalResponse;
@@ -151,7 +153,8 @@ async function handleApiRequest(
   url: URL,
   request: Request,
   env: EnvVariables,
-  cacheManager: CacheManager | null
+  cacheManager: CacheManager | null,
+  ctx: ExecutionContext
 ): Promise<Response> {
   const headers = createJsonHeaders();
 
@@ -305,11 +308,11 @@ async function handlePreloadRequest(cacheManager: CacheManager | null): Promise<
 }
 
 export default {
-  async fetch(request: Request, env: EnvVariables, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: EnvVariables, ctx: ExecutionContext): Promise<Response> {
     const logger = Logger.create('Worker', env);
 
     try {
-      return await handleRequest(request, env);
+      return await handleRequest(request, env, ctx);
     } catch (error) {
       logger.error('OmniBox Worker error', {
         error: error instanceof Error ? error.message : 'Unknown error',
