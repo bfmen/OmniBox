@@ -24,47 +24,11 @@ SHOW_PASSWORD_PAGE = "true"
 # 如需追加，填写如：BLOCKED_UA_PATTERNS = "MyBot,AnotherBot"
 BLOCKED_UA_PATTERNS = ""
 
-# ==================== 缓存 TTL 配置（单位：秒）====================
-# HTML 内容缓存时间（1小时）
-CACHE_HTML_TTL = "3600"
-
-# CSS 样式表缓存时间（1天）
-CACHE_CSS_TTL = "86400"
-
-# JavaScript 文件缓存时间（1天）
-CACHE_JS_TTL = "86400"
-
-# 图片资源缓存时间（30天）
-CACHE_IMAGE_TTL = "2592000"
-
-# 字体文件缓存时间（30天）
-CACHE_FONT_TTL = "2592000"
-
-# JSON 数据缓存时间（30分钟）
-CACHE_JSON_TTL = "1800"
-
-# 默认缓存时间（1小时）
-CACHE_DEFAULT_TTL = "3600"
-
-# ==================== 性能配置 ====================
-# 单个缓存项最大大小（1MB = 1048576 字节）
-MAX_CACHE_SIZE = "1048576"
-
-# ==================== KV 存储绑定 ====================
-# KV 命名空间用于缓存存储
-# 请在 Cloudflare Dashboard 中创建 KV 命名空间后替换 ID
-[[kv_namespaces]]
-binding = "KV_CACHE"
-id = "21feed084fa648dd932e404935aec39c"
-preview_id = "21feed084fa648dd932e404935aec39c"
-
 # 监控和可观测性配置
 [observability]
-enabled = true         # 启用 Cloudflare 的监控和日志功能
+enabled = true
 
 # ==================== 注意事项 ====================
-# 1. 确保在 Cloudflare Dashboard 中已创建对应的 KV 命名空间
-# 2. 配置管理规范：
+# 1. 配置管理规范：
 #    - 文本变量：仅在此文件中配置
 #    - 密钥(Secret)：仅通过 Cloudflare Dashboard 添加
-# 3. 缓存时间可根据实际业务需求调整

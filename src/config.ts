@@ -1,16 +1,6 @@
 // 配置与常量模块
 // OmniBox 代理 Worker 的集中化配置
 
-export interface CacheTTLConfig {
-  HTML: number;
-  CSS: number;
-  JS: number;
-  IMAGE: number;
-  FONT: number;
-  JSON: number;
-  DEFAULT: number;
-}
-
 export interface PerformanceConfig {
   MAX_REDIRECT_DEPTH: number;
   REQUEST_TIMEOUT: number;
@@ -18,7 +8,6 @@ export interface PerformanceConfig {
   MAX_RESPONSE_SIZE: number;
   MAX_TEXT_PROCESS_SIZE: number;
   CONCURRENT_REQUESTS_LIMIT: number;
-  PRELOAD_URLS: string[];
 }
 
 export interface HeadersConfig {
@@ -35,9 +24,6 @@ export interface AppConfig {
   PASSWORD_COOKIE_NAME: string;
   LAST_VISIT_COOKIE_NAME: string;
   PROXY_HINT_COOKIE_NAME: string;
-  CACHE_PREFIX: string;
-  MAX_CACHE_SIZE: number;
-  CACHE_TTL: CacheTTLConfig;
   REPLACE_URL_OBJ: string;
   HTML_INJECT_FUNC_NAME: string;
   PROXY_HINT_DELAY: number;
@@ -52,19 +38,10 @@ export interface AppConfig {
 export interface EnvVariables {
   ENVIRONMENT?: string;
   PROXY_PASSWORD?: string;
-  MAX_CACHE_SIZE?: string;
-  KV_CACHE?: KVNamespace;
   DEBUG?: string;
   LOG_LEVEL?: string;
   SHOW_PASSWORD_PAGE?: string;
   BLOCKED_UA_PATTERNS?: string;
-  CACHE_HTML_TTL?: string;
-  CACHE_CSS_TTL?: string;
-  CACHE_JS_TTL?: string;
-  CACHE_IMAGE_TTL?: string;
-  CACHE_FONT_TTL?: string;
-  CACHE_JSON_TTL?: string;
-  CACHE_DEFAULT_TTL?: string;
 }
 
 export const CONFIG: AppConfig = {
@@ -77,19 +54,6 @@ export const CONFIG: AppConfig = {
   PASSWORD_COOKIE_NAME: '__OMNIBOX_PWD__',
   LAST_VISIT_COOKIE_NAME: '__OMNIBOX_VISITEDSITE__',
   PROXY_HINT_COOKIE_NAME: '__OMNIBOX_HINT__',
-
-  CACHE_PREFIX: 'omnibox-proxy-cache-v1.0',
-  MAX_CACHE_SIZE: 1024 * 1024,
-
-  CACHE_TTL: {
-    HTML: 3600,
-    CSS: 86400,
-    JS: 86400,
-    IMAGE: 2592000,
-    FONT: 2592000,
-    JSON: 1800,
-    DEFAULT: 3600
-  },
 
   REPLACE_URL_OBJ: '__location__omnibox__',
   HTML_INJECT_FUNC_NAME: 'parseAndInsertDoc',
@@ -117,12 +81,11 @@ Crawl-delay: 10
 
   PERFORMANCE: {
     MAX_REDIRECT_DEPTH: 5,
-    REQUEST_TIMEOUT: 15000,  // 请求超时（毫秒）
-    STREAM_READ_TIMEOUT: 10000,  // 流式读取超时（毫秒）
-    MAX_RESPONSE_SIZE: 50 * 1024 * 1024,  // 最大响应体大小（50MB）
-    MAX_TEXT_PROCESS_SIZE: 5 * 1024 * 1024,  // 文本处理最大大小（5MB）
-    CONCURRENT_REQUESTS_LIMIT: 10,
-    PRELOAD_URLS: []
+    REQUEST_TIMEOUT: 15000,
+    STREAM_READ_TIMEOUT: 10000,
+    MAX_RESPONSE_SIZE: 50 * 1024 * 1024,
+    MAX_TEXT_PROCESS_SIZE: 5 * 1024 * 1024,
+    CONCURRENT_REQUESTS_LIMIT: 10
   },
 
   HEADERS: {

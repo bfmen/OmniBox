@@ -5,7 +5,6 @@ import { CONFIG, type EnvVariables } from './config.js';
 import { ContentInjector } from './injector.js';
 import { getMainPageTemplate, getPasswordPageTemplate, getErrorPageTemplate } from './templates.js';
 import { getCookie, getHTMLResponse, getUnrestrictedCorsHeaders, constantTimeEqual, hashPassword } from './utils.js';
-import { CacheManager } from './cache.js';
 
 export interface RedirectResult {
   redirect: true;
@@ -27,14 +26,12 @@ function replaceProxyUrls(value: string, actualUrl: URL): string {
 
 export class ProxyHandler {
   private env: EnvVariables;
-  private cacheManager: CacheManager | null;
   private injector: ContentInjector;
   private password: string;
   private showPasswordPage: boolean;
 
-  constructor(env: EnvVariables, cacheManager: CacheManager | null) {
+  constructor(env: EnvVariables) {
     this.env = env;
-    this.cacheManager = cacheManager;
     this.injector = new ContentInjector();
     this.password = env.PROXY_PASSWORD || CONFIG.DEFAULT_PASSWORD;
     this.showPasswordPage = env.SHOW_PASSWORD_PAGE !== 'false';
