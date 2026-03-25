@@ -3,11 +3,8 @@ name: Deploy OmniBox to Cloudflare Workers
 on:
   push:
     branches:
-      - "*"
-  workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - "*"          # 所有分支都触发（先确保能跑）
+  workflow_dispatch:  # 支持手动运行
 
 jobs:
   deploy:
@@ -27,15 +24,15 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      # ✅ 关键修改：不让 lint 阻断部署
-      - name: Lint (non-blocking)
-        run: npm run lint || true
+      - name: Lint & Type Check
+        run: |
+          npm run lint
+          npm run typecheck
 
-      - name: Type Check
-        run: npm run typecheck
-      
       - name: Validate Configuration
-        run: npx wrangler --version
+        run: |
+          echo "Validating configuration..."
+          npx wrangler --version
       
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
