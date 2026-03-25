@@ -2,18 +2,20 @@ name: Deploy OmniBox to Cloudflare Workers
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - "*"          # 所有分支都触发（先确保能跑）
+  workflow_dispatch:  # 支持手动运行
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy OmniBox to Production
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       
-      - name: Setup Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
